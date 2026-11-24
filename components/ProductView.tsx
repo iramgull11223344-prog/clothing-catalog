@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import OrderModal from "@/components/OrderModal";
 import { formatPrice } from "@/lib/format";
 
 type Variant = {
@@ -48,6 +49,41 @@ export default function ProductView({ name, description, price, mainImage, varia
   const current = colors.find((c) => c.key === colorKey) ?? colors[0];
   const image = current?.image ?? mainImage;
 
+  const [pickedSize, setPickedSize] = useState<string | null>(null);
+  const [sizeHint, setSizeHint] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const closeOrder = useCallback(() => setOrderOpen(false), []);
+
+  const hasColors = colors.length > 0 && colors.some((c) => c.name || c.hex);
+  const allSizes = current?.sizes ?? [];
+  const availableSizes = allSizes.filter((s) => s.available);
+  // Auto-pick when only one size is available; drop a pick the current colour doesn't offer.
+  const size =
+    availableSizes.length === 1
+      ? availableSizes[0].size
+      : availableSizes.some((s) => s.size === pickedSize)
+        ? pickedSize
+        : null;
+  const soldOut = allSizes.length > 0 && availableSizes.length === 0;
+
+  function pickColor(key: string) {
+    setColorKey(key);
+    setSizeHint(false);
+  }
+
+  function pickSize(s: string) {
+    setPickedSize(s);
+    setSizeHint(false);
+  }
+
+  function startOrder() {
+    if (allSizes.length > 0 && !size) {
+      setSizeHint(true);
+      return;
+    }
+    setOrderOpen(true);
+  }
+
   return (
     <div className="pv">
       <div className="pv-img">{image ? <img key={image} src={image} alt={name} /> : null}</div>
@@ -58,7 +94,7 @@ export default function ProductView({ name, description, price, mainImage, varia
         <div className="price">{formatPrice(price)}</div>
         {description ? <p className="desc">{description}</p> : null}
 
-        {colors.length > 0 && colors.some((c) => c.name || c.hex) ? (
+        {hasColors ? (
           <>
             <div className="label">
               ڕەنگ{current?.name ? <>: <b>{current.name}</b></> : null}
@@ -69,28 +105,59 @@ export default function ProductView({ name, description, price, mainImage, varia
                   key={c.key}
                   type="button"
                   aria-label={c.name || "ڕەنگ"}
+                  aria-pressed={c.key === current?.key}
                   className={`swatch ${c.key === current?.key ? "active" : ""}`}
                   style={{ background: c.hex }}
-                  onClick={() => setColorKey(c.key)}
+                  onClick={() => pickColor(c.key)}
                 />
               ))}
             </div>
           </>
         ) : null}
 
-        {current && current.sizes.length > 0 ? (
+        {allSizes.length > 0 ? (
           <>
-            <div className="label">قەبارە</div>
+            <div className="label">
+              قەبارە{size ? <>: <b>{size}</b></> : null}
+            </div>
             <div className="sizes">
-              {current.sizes.map((s) => (
-                <span key={s.size} className={`size ${s.available ? "" : "off"}`}>
+              {allSizes.map((s) => (
+                <button
+                  key={s.size}
+                  type="button"
+                  disabled={!s.available}
+                  aria-pressed={s.size === size}
+                  className={`size ${s.available ? "" : "off"} ${s.size === size ? "active" : ""}`}
+                  onClick={() => pickSize(s.size)}
+                >
                   {s.size}
-                </span>
+                </button>
               ))}
             </div>
+            {sizeHint ? <div className="size-hint">تکایە سەرەتا قەبارەیەک هەڵبژێرە.</div> : null}
           </>
         ) : null}
+
+        <button type="button" className="btn-wa order-btn" disabled={soldOut} onClick={startOrder}>
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
+            />
+          </svg>
+          {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردن لە ڕێگەی واتسئاپ"}
+        </button>
       </div>
+
+      {orderOpen ? (
+        <OrderModal
+          productName={name}
+          color={hasColors ? current?.name || current?.hex || "" : ""}
+          size={size ?? ""}
+          price={formatPrice(price)}
+          onClose={closeOrder}
+        />
+      ) : null}
     </div>
   );
 }
