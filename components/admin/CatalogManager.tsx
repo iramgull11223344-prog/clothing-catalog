@@ -7,6 +7,8 @@ import { uploadImage, removeImages } from "@/lib/image";
 import { makeSlug } from "@/lib/format";
 import { getFile, putFile } from "@/lib/draft";
 import { useDraft } from "@/lib/useDraft";
+import { nameKey } from "@/lib/catalog";
+import { notifyCatalogChanged, onCatalogChanged } from "@/lib/catalogEvents";
 import PhotoPicker from "./PhotoPicker";
 
 type Sub = { id: string; name: string; image_url: string | null; is_active: boolean };
@@ -55,6 +57,7 @@ export default function CatalogManager() {
 
   useEffect(() => {
     load();
+    return onCatalogChanged(load);
   }, [load]);
 
   const fail = (err: any) => setMsg({ t: "err", m: err?.message ?? "هەڵەیەک ڕوویدا" });
@@ -65,6 +68,11 @@ export default function CatalogManager() {
     if (!catName.trim()) {
       setCatErr("ناوی بەشەکە بنووسە");
       document.getElementById("cm-cat-name")?.focus({ preventScroll: true });
+      return;
+    }
+    const sameCat = cats.find((c) => nameKey(c.name) === nameKey(catName));
+    if (sameCat) {
+      setCatErr(`بەشێکی سەرەکی بە ناوی «${sameCat.name}» پێشتر هەیە.`);
       return;
     }
     setBusy(true);
@@ -80,9 +88,10 @@ export default function CatalogManager() {
       await putFile("cat:new", null);
       setCatMsg({ t: "ok", m: "بەشی سەرەکی زیادکرا ✅" });
       await load();
+      notifyCatalogChanged();
     } catch (err: any) {
       // Nothing typed is lost; the error stays next to the form.
-      setCatMsg({ t: "err", m: err?.message ?? "هەڵەیەک ڕوویدا" });
+      setCatMsg({ t: "err", m: err?.code === "23505" ? "ئەم ناوە پێشتر هەیە." : err?.message ?? "هەڵەیەک ڕوویدا" });
     } finally {
       setBusy(false);
     }
@@ -94,6 +103,10 @@ export default function CatalogManager() {
     const found: { cat?: string; name?: string } = {};
     if (!subCat) found.cat = "بەشی سەرەکی هەڵبژێرە";
     if (!subName.trim()) found.name = "ناوی بەشی لاوەکی بنووسە";
+    else {
+      const same = cats.find((c) => c.id === subCat)?.subcategories.find((x) => nameKey(x.name) === nameKey(subName));
+      if (same) found.name = `«${same.name}» پێشتر لەم بەشەدا هەیە، پێویست بە دروستکردنەوە ناکات.`;
+    }
     setSubErr(found);
     if (found.cat || found.name) {
       document.getElementById(found.cat ? "cm-sub-cat" : "cm-sub-name")?.focus({ preventScroll: true });
@@ -109,8 +122,9 @@ export default function CatalogManager() {
       clearSubName();
       setSubMsg({ t: "ok", m: "بەشی لاوەکی زیادکرا ✅" });
       await load();
+      notifyCatalogChanged();
     } catch (err: any) {
-      setSubMsg({ t: "err", m: err?.message ?? "هەڵەیەک ڕوویدا" });
+      setSubMsg({ t: "err", m: err?.code === "23505" ? "ئەم بەشە لاوەکییە پێشتر هەیە." : err?.message ?? "هەڵەیەک ڕوویدا" });
     } finally {
       setBusy(false);
     }
@@ -119,7 +133,8 @@ export default function CatalogManager() {
   async function toggle(table: "categories" | "subcategories", id: string, value: boolean) {
     const { error } = await supabase.from(table).update({ is_active: value }).eq("id", id);
     if (error) return fail(error);
-    load();
+    await load();
+    notifyCatalogChanged();
   }
 
   async function remove(table: "categories" | "subcategories", id: string, name: string, image: string | null) {
@@ -127,7 +142,8 @@ export default function CatalogManager() {
     const { error } = await supabase.from(table).delete().eq("id", id);
     if (error) return fail(error);
     await removeImages([image]);
-    load();
+    await load();
+    notifyCatalogChanged();
   }
 
   return (

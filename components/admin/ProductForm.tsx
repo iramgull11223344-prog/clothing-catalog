@@ -7,10 +7,12 @@ import { uploadImage, uid } from "@/lib/image";
 import { loadDraft, saveDraft, clearDraft, putFile, getFile, clearScroll } from "@/lib/draft";
 import PhotoPicker from "./PhotoPicker";
 import ColorPicker from "./ColorPicker";
+import SubcategoryPicker, { type SubOption } from "./SubcategoryPicker";
+import { onCatalogChanged } from "@/lib/catalogEvents";
 import { PRESET_COLORS, readColorCache, writeColorCache, colorKey, type ColorOption } from "@/lib/colors";
 import { removeDraft } from "@/lib/draft";
 
-type Cat = { id: string; name: string; subcategories: { id: string; name: string }[] };
+type Cat = { id: string; name: string; is_active?: boolean; subcategories: SubOption[] };
 type ColorRow = {
   id: string;
   name: string;
@@ -237,16 +239,51 @@ export default function ProductForm() {
     });
   }, [loaded, catId, subId, name, desc, price, colors]);
 
-  useEffect(() => {
+  // Categories are reloaded whenever another admin tab changes them (and on refocus).
+  const [catsLoaded, setCatsLoaded] = useState(false);
+  const [staleNote, setStaleNote] = useState<string | null>(null);
+  const loadCats = useCallback(() => {
     supabase
       .from("categories")
-      .select("id,name,subcategories(id,name)")
+      .select("id,name,is_active,subcategories(id,name,sort_order,is_active)")
       .order("sort_order")
       .order("created_at")
-      .then(({ data }) => setCats((data as any) ?? []));
+      .then(({ data, error }: any) => {
+        if (error || !data) return;
+        setCats(data);
+        setCatsLoaded(true);
+      });
   }, []);
+  useEffect(() => {
+    loadCats();
+    return onCatalogChanged(loadCats);
+  }, [loadCats]);
+
+  // A restored draft may point to a category that was deleted meanwhile: clear it, with a note.
+  useEffect(() => {
+    if (!catsLoaded || !loaded) return;
+    const cat = cats.find((c) => c.id === catId);
+    if (catId && !cat) {
+      setCatId("");
+      setSubId("");
+      setStaleNote("بەشی هەڵبژێردراوی ڕەشنووسەکە ئیتر نەماوە، دووبارە هەڵیبژێرە.");
+    } else if (cat && subId && !cat.subcategories.some((x) => x.id === subId)) {
+      setSubId("");
+      setStaleNote("بەشە لاوەکییەکەی ڕەشنووسەکە ئیتر نەماوە، دووبارە هەڵیبژێرە.");
+    }
+  }, [catsLoaded, loaded, cats, catId, subId]);
 
   const subs = cats.find((c) => c.id === catId)?.subcategories ?? [];
+
+  const addSubLocally = useCallback(
+    (sub: SubOption) =>
+      setCats((list) =>
+        list.map((c) =>
+          c.id === catId && !c.subcategories.some((x) => x.id === sub.id) ? { ...c, subcategories: [...c.subcategories, sub] } : c
+        )
+      ),
+    [catId]
+  );
 
   const patchColor = (id: string, patch: Partial<ColorRow>) => {
     if (patch.file) putFile(`color:${id}`, patch.file);
@@ -406,6 +443,7 @@ export default function ProductForm() {
             onChange={(e) => {
               setCatId(e.target.value);
               setSubId("");
+              setStaleNote(null);
             }}
             aria-invalid={!!errs.sub && !catId}
           >
@@ -413,30 +451,29 @@ export default function ProductForm() {
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
+                {c.is_active === false ? " (شاراوە)" : ""}
               </option>
             ))}
           </select>
         </label>
-        <label className={`field ${errs.sub ? "has-err" : ""}`} id="pf-sub">
+        <div className={`field ${errs.sub ? "has-err" : ""}`} id="pf-sub">
           <span>بەشی لاوەکی</span>
-          <select
+          <SubcategoryPicker
+            key={catId || "none"}
+            catId={catId}
+            subs={subs}
             value={subId}
-            aria-invalid={!!errs.sub}
-            onChange={(e) => {
-              setSubId(e.target.value);
+            invalid={!!errs.sub}
+            onPick={(id) => {
+              setSubId(id);
               clearErr("sub");
+              setStaleNote(null);
             }}
-            disabled={!catId}
-          >
-            <option value="">هەڵبژێرە...</option>
-            {subs.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onCreated={addSubLocally}
+          />
           {errs.sub ? <small className="field-err">{errs.sub}</small> : null}
-        </label>
+          {staleNote && !errs.sub ? <small className="field-note">{staleNote}</small> : null}
+        </div>
         <label className={`field ${errs.price ? "has-err" : ""}`} id="pf-price">
           <span>نرخ (دینار)</span>
           <input
