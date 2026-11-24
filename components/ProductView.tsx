@@ -84,20 +84,51 @@ export default function ProductView({ name, description, price, mainImage, varia
     setOrderOpen(true);
   }
 
+  // Every photo is stacked and cross-faded, so switching colour never flashes.
+  const photos = Array.from(new Set([mainImage, ...colors.map((c) => c.image)].filter(Boolean))) as string[];
+  const thumbs = colors.filter((c) => c.image);
+
   return (
     <div className="pv">
-      <div className="pv-img">{image ? <img key={image} src={image} alt={name} /> : null}</div>
+      <div className="pv-media">
+        <div className="pv-img">
+          {photos.map((src) => (
+            <img
+              key={src}
+              src={src}
+              alt={src === image ? name : ""}
+              aria-hidden={src === image ? undefined : true}
+              className={src === image ? "on" : ""}
+            />
+          ))}
+        </div>
+        {thumbs.length > 1 ? (
+          <div className="pv-thumbs">
+            {thumbs.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                className={`pv-thumb ${c.key === current?.key ? "on" : ""}`}
+                aria-label={c.name || "ڕەنگ"}
+                onClick={() => pickColor(c.key)}
+              >
+                <img src={c.image as string} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
-      <div>
+      <div className="pv-info">
         {crumbs ? <div className="crumbs">{crumbs}</div> : null}
         <h1>{name}</h1>
-        <div className="price">{formatPrice(price)}</div>
+        <div className="pv-price">{formatPrice(price)}</div>
         {description ? <p className="desc">{description}</p> : null}
 
         {hasColors ? (
-          <>
-            <div className="label">
-              ڕەنگ{current?.name ? <>: <b>{current.name}</b></> : null}
+          <div className="opt">
+            <div className="opt-label">
+              ڕەنگ{current?.name ? <b>{current.name}</b> : null}
             </div>
             <div className="swatches">
               {colors.map((c) => (
@@ -106,19 +137,21 @@ export default function ProductView({ name, description, price, mainImage, varia
                   type="button"
                   aria-label={c.name || "ڕەنگ"}
                   aria-pressed={c.key === current?.key}
+                  title={c.name || undefined}
                   className={`swatch ${c.key === current?.key ? "active" : ""}`}
-                  style={{ background: c.hex }}
                   onClick={() => pickColor(c.key)}
-                />
+                >
+                  <span style={{ background: c.hex }} />
+                </button>
               ))}
             </div>
-          </>
+          </div>
         ) : null}
 
         {allSizes.length > 0 ? (
-          <>
-            <div className="label">
-              قەبارە{size ? <>: <b>{size}</b></> : null}
+          <div className="opt">
+            <div className="opt-label">
+              قەبارە{size ? <b>{size}</b> : null}
             </div>
             <div className="sizes">
               {allSizes.map((s) => (
@@ -134,19 +167,22 @@ export default function ProductView({ name, description, price, mainImage, varia
                 </button>
               ))}
             </div>
-            {sizeHint ? <div className="size-hint">تکایە سەرەتا قەبارەیەک هەڵبژێرە.</div> : null}
-          </>
+            {sizeHint ? <div className="size-hint" role="alert">تکایە سەرەتا قەبارەیەک هەڵبژێرە.</div> : null}
+          </div>
         ) : null}
 
-        <button type="button" className="btn-wa order-btn" disabled={soldOut} onClick={startOrder}>
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
-            />
-          </svg>
-          {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردن لە ڕێگەی واتسئاپ"}
-        </button>
+        <div className="pv-cta">
+          <button type="button" className="btn-wa order-btn" disabled={soldOut} onClick={startOrder}>
+            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
+              />
+            </svg>
+            {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردن لە ڕێگەی واتسئاپ"}
+          </button>
+        </div>
+        <p className="pv-note">داواکارییەکەت ڕاستەوخۆ دەچێتە واتسئاپی دوکان و وەڵامت دەدرێتەوە.</p>
       </div>
 
       {orderOpen ? (

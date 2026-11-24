@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
 import { supabase } from "@/lib/supabase";
+import { CARD_SELECT, getNavCats } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +17,10 @@ export default async function CategoryPage({
   const { id } = await params;
   const { sub } = await searchParams;
 
-  const { data: cat } = await supabase
-    .from("categories")
-    .select("id,name,subcategories(id,name,sort_order)")
-    .eq("id", id)
-    .maybeSingle();
+  const [{ data: cat }, navCats] = await Promise.all([
+    supabase.from("categories").select("id,name,subcategories(id,name,sort_order)").eq("id", id).maybeSingle(),
+    getNavCats(),
+  ]);
   if (!cat) notFound();
 
   const subs = [...(cat.subcategories ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
@@ -31,7 +31,7 @@ export default async function CategoryPage({
   if (subIds.length) {
     const { data } = await supabase
       .from("products")
-      .select("id,name,price,main_image_url,product_variants(color_hex)")
+      .select(CARD_SELECT)
       .in("subcategory_id", subIds)
       .eq("is_active", true)
       .order("sort_order")
@@ -41,35 +41,41 @@ export default async function CategoryPage({
 
   return (
     <>
-      <Header back="/" />
+      <Header back="/" cats={navCats} active={cat.id} />
       <main className="container">
-        <section className="hero">
+        <div className="page-head">
           <h1>{cat.name}</h1>
-        </section>
+          <span>{products.length} کاڵا</span>
+        </div>
 
         {subs.length > 0 ? (
-          <div className="chips">
-            <Link href={`/c/${cat.id}`} className={`chip ${!activeSub ? "active" : ""}`}>
+          <nav className="subtabs" aria-label="بەشە لاوەکییەکان">
+            <Link href={`/c/${cat.id}`} className={`subtab ${!activeSub ? "on" : ""}`}>
               هەموو
             </Link>
             {subs.map((s: any) => (
               <Link
                 key={s.id}
                 href={`/c/${cat.id}?sub=${s.id}`}
-                className={`chip ${activeSub === s.id ? "active" : ""}`}
+                className={`subtab ${activeSub === s.id ? "on" : ""}`}
               >
                 {s.name}
               </Link>
             ))}
-          </div>
+          </nav>
         ) : null}
 
         {products.length === 0 ? (
-          <div className="empty">هێشتا کاڵا لەم بەشەدا نییە</div>
+          <div className="empty">
+            هێشتا کاڵا لەم بەشەدا نییە.{" "}
+            <Link href="/" className="link">
+              گەڕانەوە بۆ سەرەتا
+            </Link>
+          </div>
         ) : (
-          <div className="grid" style={{ paddingBottom: 48 }}>
-            {products.map((p) => (
-              <ProductCard key={p.id} {...p} />
+          <div className="grid page-grid">
+            {products.map((p, i) => (
+              <ProductCard key={p.id} {...p} priority={i < 2} />
             ))}
           </div>
         )}
