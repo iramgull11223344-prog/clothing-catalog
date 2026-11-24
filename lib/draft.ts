@@ -6,7 +6,8 @@ const KEY = "new-product-draft-v1";
 const DB_NAME = "catalog-draft";
 const STORE = "files";
 
-export type DraftColor = { id: string; name: string; hex: string; sizes: string[] };
+// `custom` = the unsaved text in the "قەبارەی تر" input (optional for older drafts).
+export type DraftColor = { id: string; name: string; hex: string; sizes: string[]; custom?: string };
 export type Draft = {
   catId: string;
   subId: string;
@@ -78,4 +79,33 @@ export async function clearDraft() {
     /* ignore */
   }
   await run("readwrite", (s) => s.clear());
+}
+
+// ---- Scroll position (sessionStorage: per tab, survives the camera-triggered reload).
+const SCROLL_KEY = "new-product-scroll-v1";
+
+export function saveScroll(y: number = window.scrollY) {
+  try {
+    sessionStorage.setItem(SCROLL_KEY, String(Math.round(y)));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadScroll(): number | null {
+  try {
+    const v = sessionStorage.getItem(SCROLL_KEY);
+    const n = v == null ? NaN : Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearScroll() {
+  try {
+    sessionStorage.removeItem(SCROLL_KEY);
+  } catch {
+    /* ignore */
+  }
 }

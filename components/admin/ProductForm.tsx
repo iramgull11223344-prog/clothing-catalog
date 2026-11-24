@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { uploadImage, uid } from "@/lib/image";
-import { loadDraft, saveDraft, clearDraft, putFile, getFile } from "@/lib/draft";
+import { loadDraft, saveDraft, clearDraft, putFile, getFile, saveScroll, loadScroll, clearScroll } from "@/lib/draft";
 import PhotoPicker from "./PhotoPicker";
 
 type Cat = { id: string; name: string; subcategories: { id: string; name: string }[] };
@@ -15,6 +15,7 @@ type ColorRow = {
   file: File | null;
   preview: string | null;
   sizes: string[];
+  custom: string; // text typed in "قەبارەی تر" but not added yet
 };
 
 const PRESETS: { name: string; hex: string }[] = [
@@ -43,7 +44,7 @@ function rank(s: string) {
 }
 
 function newColor(sizes: string[] = []): ColorRow {
-  return { id: uid(), name: "", hex: "#111111", file: null, preview: null, sizes };
+  return { id: uid(), name: "", hex: "#111111", file: null, preview: null, sizes, custom: "" };
 }
 
 function ColorCard({
@@ -57,7 +58,8 @@ function ColorCard({
   onRemove: () => void;
   canRemove: boolean;
 }) {
-  const [custom, setCustom] = useState("");
+  const custom = color.custom;
+  const setCustom = (v: string) => onChange({ custom: v });
 
   const toggle = (s: string) => {
     const next = color.sizes.includes(s) ? color.sizes.filter((x) => x !== s) : [...color.sizes, s];
@@ -66,8 +68,8 @@ function ColorCard({
 
   const addCustom = () => {
     const v = custom.trim();
-    if (v && !color.sizes.includes(v)) onChange({ sizes: [...color.sizes, v].sort((a, b) => rank(a) - rank(b)) });
-    setCustom("");
+    if (v && !color.sizes.includes(v)) onChange({ sizes: [...color.sizes, v].sort((a, b) => rank(a) - rank(b)), custom: "" });
+    else setCustom("");
   };
 
   return (
@@ -189,13 +191,13 @@ export default function ProductForm() {
           const rows: ColorRow[] = [];
           for (const c of d.colors) {
             const f = await getFile(`color:${c.id}`);
-            rows.push({ ...c, file: f, preview: f ? URL.createObjectURL(f) : null });
+            rows.push({ ...c, custom: c.custom ?? "", file: f, preview: f ? URL.createObjectURL(f) : null });
           }
           if (alive) setColors(rows);
         }
         const hasContent =
           !!(d.name || d.desc || d.price || main) ||
-          (d.colors ?? []).some((c) => c.name || c.sizes?.length);
+          (d.colors ?? []).some((c) => c.name || c.sizes?.length || c.custom);
         if (alive && hasContent) setRestored(true);
       }
       if (alive) setLoaded(true);
@@ -214,9 +216,60 @@ export default function ProductForm() {
       name,
       desc,
       price,
-      colors: colors.map(({ id, name, hex, sizes }) => ({ id, name, hex, sizes })),
+      colors: colors.map(({ id, name, hex, sizes, custom }) => ({ id, name, hex, sizes, custom })),
     });
   }, [loaded, catId, subId, name, desc, price, colors]);
+
+  // Once the draft is back, return to the saved scroll position, then keep it up to date.
+  useEffect(() => {
+    if (!loaded) return;
+    const prevRestoration = history.scrollRestoration;
+    history.scrollRestoration = "manual";
+
+    const target = loadScroll();
+    let raf = 0;
+    let restoreRaf = 0;
+    let tracking = false;
+    const onScroll = () => {
+      if (!tracking) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => saveScroll());
+    };
+    // Stop restoring as soon as the user scrolls by hand.
+    const stopRestore = () => {
+      cancelAnimationFrame(restoreRaf);
+      tracking = true;
+    };
+
+    if (target != null) {
+      // The page can still be growing (photos, categories), so retry until we reach it (max ~1.5s).
+      const started = performance.now();
+      const tick = () => {
+        window.scrollTo(0, target);
+        if (Math.abs(window.scrollY - target) <= 2 || performance.now() - started > 1500) {
+          tracking = true;
+          saveScroll();
+          return;
+        }
+        restoreRaf = requestAnimationFrame(tick);
+      };
+      restoreRaf = requestAnimationFrame(tick);
+      window.addEventListener("touchstart", stopRestore, { passive: true, once: true });
+      window.addEventListener("wheel", stopRestore, { passive: true, once: true });
+    } else {
+      tracking = true;
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(restoreRaf);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("touchstart", stopRestore);
+      window.removeEventListener("wheel", stopRestore);
+      history.scrollRestoration = prevRestoration;
+    };
+  }, [loaded]);
 
   useEffect(() => {
     supabase
@@ -254,6 +307,7 @@ export default function ProductForm() {
     setColors([newColor()]);
     setRestored(false);
     clearDraft();
+    clearScroll();
   };
 
   async function submit(e: FormEvent) {

@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { ChangeEvent } from "react";
+import { saveScroll } from "@/lib/draft";
 
 export default function PhotoPicker({
   preview,
@@ -15,6 +16,12 @@ export default function PhotoPicker({
   const cam = useRef<HTMLInputElement>(null);
   const gal = useRef<HTMLInputElement>(null);
 
+  // Phones often reload the page while the camera/gallery is open, so remember where we were.
+  const open = (input: HTMLInputElement | null) => {
+    saveScroll();
+    input?.click();
+  };
+
   const handle = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) onPick(f);
@@ -23,14 +30,14 @@ export default function PhotoPicker({
 
   return (
     <div className="photo">
-      <div className="photo-box" onClick={() => cam.current?.click()}>
+      <div className="photo-box" onClick={() => open(cam.current)}>
         {preview ? <img src={preview} alt="" /> : <span>{label}</span>}
       </div>
       <div className="photo-btns">
-        <button type="button" className="btn btn-sm" onClick={() => cam.current?.click()}>
+        <button type="button" className="btn btn-sm" onClick={() => open(cam.current)}>
           📷 کامێرا
         </button>
-        <button type="button" className="btn btn-sm" onClick={() => gal.current?.click()}>
+        <button type="button" className="btn btn-sm" onClick={() => open(gal.current)}>
           🖼️ گاڵەری
         </button>
       </div>
