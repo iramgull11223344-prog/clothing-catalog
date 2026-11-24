@@ -5,6 +5,7 @@ import FilterView from "@/components/FilterView";
 import { supabase } from "@/lib/supabase";
 import { CARD_SELECT, getNavCats } from "@/lib/catalog";
 import { COLLECTION_IMAGE, HERO_IMAGE } from "@/lib/config";
+import { HERO_KEY, mergeHero } from "@/lib/hero";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ function Arrow() {
 }
 
 export default async function Home() {
-  const [catsRes, latestRes, coversRes, navCats] = await Promise.all([
+  const [catsRes, latestRes, coversRes, navCats, heroRes] = await Promise.all([
     supabase
       .from("categories")
       .select("id,name,image_url")
@@ -40,7 +41,10 @@ export default async function Home() {
       .order("created_at", { ascending: false })
       .limit(60),
     getNavCats(),
+    supabase.from("site_settings").select("value").eq("key", HERO_KEY).maybeSingle(),
   ]);
+  // Banner texts edited in /admin (empty or missing → default texts).
+  const hero = mergeHero(heroRes.data?.value);
 
   const latest: any[] = latestRes.data ?? [];
   const covers = new Map<string, string>();
@@ -52,7 +56,7 @@ export default async function Home() {
   const cats = allCats.slice(0, 4);
 
   const photos = latest.map((p) => p.main_image_url).filter(Boolean) as string[];
-  const heroImg = HERO_IMAGE || photos[0] || cats.find((c) => c.cover)?.cover || null;
+  const heroImg = hero.image_url || HERO_IMAGE || photos[0] || cats.find((c) => c.cover)?.cover || null;
   const collectionImg = COLLECTION_IMAGE || photos.find((src) => src !== heroImg) || heroImg;
 
   return (
@@ -64,15 +68,15 @@ export default async function Home() {
           <div className="container">
             <div className={`hero-panel ${heroImg ? "" : "no-img"}`} dir="ltr">
               <div className="hero-copy" dir="rtl">
-                <p className="eyebrow">مۆدێرنی پێویست</p>
-                <h1>کۆمەڵەی جلوبەرگی شەقامی بێوەخت</h1>
-                <p className="hero-lead">ئەو جلە بنەڕەتییانەی لەگەڵ شێوازی مۆدێرن، بۆ ژیانی ڕۆژانە.</p>
+                <p className="eyebrow">{hero.eyebrow}</p>
+                <h1>{hero.title}</h1>
+                <p className="hero-lead">{hero.lead}</p>
                 <div className="hero-btns">
                   <Link href="/shop" className="btn-solid">
-                    کڕینی کۆمەڵەکە
+                    {hero.btn1}
                   </Link>
                   <a href="#new" className="btn-line">
-                    گەڕان بەدوای دیمەنەکان
+                    {hero.btn2}
                   </a>
                 </div>
               </div>

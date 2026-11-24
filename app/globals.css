@@ -395,6 +395,17 @@ input[type="color"] { width: 44px; height: 44px; padding: 2px; border: 1px solid
 .color-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .preset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; }
+/* home banner settings (admin) */
+.hero-count { float: left; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hero-preview { border-radius: var(--r-lg); overflow: hidden; }
+.hero-preview .hero-copy { padding: 22px 18px 26px; }
+.hero-preview .hero-copy h1 { font-size: 28px; max-width: none; }
+.hero-preview .hero-lead { font-size: 14px; margin-top: 10px; }
+.hero-preview .hero-btns { margin-top: 18px; gap: 8px; }
+.hero-preview .btn-solid, .hero-preview .btn-line { min-height: 40px; padding: 0 18px; font-size: 13px; pointer-events: none; }
+.hero-preview .hero-media { aspect-ratio: 16 / 10; }
+.hero-preview .hero-panel.no-img .hero-copy { padding: 36px 18px; }
+@media (min-width: 900px) { .hero-preview .hero-panel { min-height: 0; } .hero-preview .hero-copy { padding: 32px; } .hero-preview .hero-media { aspect-ratio: auto; } }
 /* existing products: picker, merge, editor (admin) */
 .merge-box .merge-open { width: 100%; border-style: dashed; padding: 12px 16px; }
 .merge-head { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }

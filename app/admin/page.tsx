@@ -7,15 +7,17 @@ import ProductForm from "@/components/admin/ProductForm";
 import ProductList from "@/components/admin/ProductList";
 import CatalogManager from "@/components/admin/CatalogManager";
 import QrTab from "@/components/admin/QrTab";
+import HeroSettingsTab from "@/components/admin/HeroSettingsTab";
 import { supabase } from "@/lib/supabase";
 import { ADMIN_TAB_KEY, loadScroll, saveScroll } from "@/lib/draft";
 
-type Tab = "new" | "products" | "catalog" | "qr";
+type Tab = "new" | "products" | "catalog" | "hero" | "qr";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "new", label: "کاڵای نوێ" },
   { id: "products", label: "کاڵاکان" },
   { id: "catalog", label: "بەشەکان" },
+  { id: "hero", label: "پێشەکی" },
   { id: "qr", label: "QR" },
 ];
 
@@ -209,6 +211,7 @@ export default function AdminPage() {
     new: () => <ProductForm />,
     products: () => <ProductList />,
     catalog: () => <CatalogManager />,
+    hero: () => <HeroSettingsTab />,
     qr: () => <QrTab />,
   };
 
