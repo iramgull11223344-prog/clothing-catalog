@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import OrderModal from "@/components/OrderModal";
-import { formatPrice, formatPriceKu } from "@/lib/format";
+import { formatPriceKu } from "@/lib/format";
 import { effectivePrice, toPrice } from "@/lib/variantPrice";
 import { addToCart } from "@/lib/cart";
 
@@ -215,25 +215,25 @@ export default function ProductView({ productId, name, description, price, mainI
             </svg>
             {soldOut ? "بەردەست نییە" : added ? "✓ زیادکرا" : "زیادکردن بۆ سەبەتە"}
           </button>
-          <button type="button" className="btn-wa order-btn" disabled={soldOut} onClick={startOrder}>
-            <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
-              />
+          <button type="button" className="btn-order order-btn" disabled={soldOut} onClick={startOrder}>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 3L5 13.5h6L10 21l8-10.5h-6z" />
             </svg>
-            {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردنی خێرا لە واتسئاپ"}
+            {soldOut ? "بەردەست نییە" : "داواکردنی خێرا"}
           </button>
         </div>
-        <p className="pv-note">دەتوانیت چەند کاڵایەک لە بەشە جیاوازەکان بخەیتە سەبەتەوە و هەموویان پێکەوە لە واتسئاپ بنێریت.</p>
+        <p className="pv-note">دەتوانیت چەند کاڵایەک لە بەشە جیاوازەکان بخەیتە سەبەتەوە و هەموویان پێکەوە لێرەوە داوا بکەیت.</p>
       </div>
 
       {orderOpen ? (
         <OrderModal
+          productId={productId}
           productName={name}
           color={hasColors ? current?.name || current?.hex || "" : ""}
+          colorHex={hasColors ? current?.hex ?? null : null}
           size={size ?? ""}
-          price={formatPrice(currentPrice)}
+          price={currentPrice}
+          image={image ?? null}
           onClose={closeOrder}
         />
       ) : null}

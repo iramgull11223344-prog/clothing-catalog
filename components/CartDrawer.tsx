@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabase";
-import { formatPrice, formatPriceKu, toKuDigits } from "@/lib/format";
+import { formatPriceKu, toKuDigits } from "@/lib/format";
 import { effectivePrice, toPrice } from "@/lib/variantPrice";
-import { buildCartMessage, loadCustomer, saveCustomer, whatsappUrl, type Customer } from "@/lib/whatsapp";
+import { useCheckout, type PlacedOrder } from "@/lib/orders";
+import CheckoutFields from "@/components/CheckoutFields";
+import OrderSuccess from "@/components/OrderSuccess";
 import { cartCount, cartTotal, clearCart, getCart, patchCartItems, removeFromCart, setQty, useCart, type CartItem } from "@/lib/cart";
 
 type Props = { open: boolean; onClose: () => void };
@@ -47,17 +49,24 @@ async function refreshPrices() {
 export default function CartDrawer({ open, onClose }: Props) {
   const items = useCart();
   const [mounted, setMounted] = useState(false);
-  const [customer, setCustomer] = useState<Customer>({ name: "", phone: "", address: "" });
-  const [errs, setErrs] = useState<Partial<Record<keyof Customer, string>>>({});
   const [undo, setUndo] = useState<{ name: string; fn: () => void } | null>(null);
-  const [sentUrl, setSentUrl] = useState<string | null>(null);
+  const [placed, setPlaced] = useState<PlacedOrder | null>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
   const undoTimer = useRef(0);
 
-  useEffect(() => {
-    setMounted(true);
-    setCustomer(loadCustomer());
-  }, []);
+  // Order straight from the site: only ids/colour/size/qty are sent; prices are set by the database.
+  const ck = useCheckout(
+    () =>
+      getCart()
+        .filter((i) => !i.unavailable)
+        .map((i) => ({ productId: i.productId, color: i.color, colorHex: i.colorHex, size: i.size, qty: i.qty })),
+    (o) => {
+      clearCart();
+      setPlaced(o);
+    }
+  );
+
+  useEffect(() => setMounted(true), []);
 
   // Open: refresh prices, lock page scroll, focus the close button, Esc closes.
   useEffect(() => {
@@ -77,18 +86,10 @@ export default function CartDrawer({ open, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // The thank-you panel is shown until the bag is closed.
   useEffect(() => {
-    if (!open) setSentUrl((u) => (u && items.length ? null : u));
-  }, [open, items.length]);
-
-  const setField = (k: keyof Customer, v: string) => {
-    setCustomer((c) => {
-      const next = { ...c, [k]: v };
-      saveCustomer(next); // remembered on this device
-      return next;
-    });
-    setErrs((e) => (e[k] ? { ...e, [k]: undefined } : e));
-  };
+    if (!open) setPlaced(null);
+  }, [open]);
 
   const remove = useCallback((i: CartItem) => {
     const fn = removeFromCart(i.key);
@@ -97,37 +98,26 @@ export default function CartDrawer({ open, onClose }: Props) {
     undoTimer.current = window.setTimeout(() => setUndo(null), 5000);
   }, []);
 
-  function send(e: FormEvent) {
-    e.preventDefault();
-    const c = { name: customer.name.trim(), phone: customer.phone.trim(), address: customer.address.trim() };
-    const found: typeof errs = {};
-    if (!c.name) found.name = "ناوت بنووسە";
-    if (!c.phone) found.phone = "ژمارەی مۆبایل بنووسە";
-    else if (c.phone.replace(/\D/g, "").length < 7) found.phone = "ژمارەی مۆبایل دروست نییە";
-    if (!c.address) found.address = "شار و گەڕەک بنووسە";
-    setErrs(found);
-    if (Object.keys(found).length) {
-      document.getElementById(`cart-${Object.keys(found)[0]}`)?.focus();
-      return;
-    }
-    const lines = items
-      .filter((i) => !i.unavailable)
-      .map((i) => ({ name: i.name, color: i.color, size: i.size, qty: i.qty, price: i.price }));
-    if (!lines.length) return;
-    saveCustomer(c);
-    const url = whatsappUrl(buildCartMessage(lines, c, formatPrice));
-    const win = window.open(url, "_blank");
-    if (win) win.opener = null;
-    else window.location.href = url;
-    clearCart();
-    setSentUrl(url);
-  }
-
   if (!mounted) return null;
 
   const live = items.filter((i) => !i.unavailable);
   const count = cartCount(items);
   const total = cartTotal(items);
+  const undoBar = undo ? (
+    <div className="cart-undo" role="status">
+      «{undo.name}» لابرا.
+      <button
+        type="button"
+        className="link link-btn"
+        onClick={() => {
+          undo.fn();
+          setUndo(null);
+        }}
+      >
+        گەڕاندنەوە
+      </button>
+    </div>
+  ) : null;
 
   return createPortal(
     <div className={`cart-root ${open ? "open" : ""}`} aria-hidden={!open} inert={!open || undefined}>
@@ -135,7 +125,7 @@ export default function CartDrawer({ open, onClose }: Props) {
       <aside className="cart-drawer" role="dialog" aria-modal="true" aria-labelledby="cart-title">
         <header className="cart-head">
           <h2 id="cart-title">
-            سەبەتەی کڕین {count ? <span>({toKuDigits(count)})</span> : null}
+            سەبەتەی کڕین {count && !placed ? <span>({toKuDigits(count)})</span> : null}
           </h2>
           <button ref={closeBtn} type="button" className="icon-btn" aria-label="داخستن" onClick={onClose}>
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -144,17 +134,9 @@ export default function CartDrawer({ open, onClose }: Props) {
           </button>
         </header>
 
-        {sentUrl ? (
-          <div className="cart-body cart-done">
-            <div className="cart-done-mark" aria-hidden="true">✓</div>
-            <h3>داواکارییەکەت ئامادە کرا</h3>
-            <p>واتسئاپ کرایەوە و نامەکە نووسراوە؛ تەنها دوگمەی ناردن لە واتسئاپدا دابگرە.</p>
-            <a className="btn-line" href={sentUrl} target="_blank" rel="noopener noreferrer">
-              واتسئاپ نەکرایەوە؟ دووبارە بیکەرەوە
-            </a>
-            <button type="button" className="btn-solid" onClick={onClose}>
-              بەردەوامبوون لە گەڕان
-            </button>
+        {placed ? (
+          <div className="cart-body">
+            <OrderSuccess order={placed} onClose={onClose} />
           </div>
         ) : items.length === 0 ? (
           <div className="cart-body cart-empty">
@@ -166,17 +148,10 @@ export default function CartDrawer({ open, onClose }: Props) {
             <a className="btn-solid" href="/shop" onClick={onClose}>
               بچۆ بۆ دوکان
             </a>
-            {undo ? (
-              <div className="cart-undo" role="status">
-                «{undo.name}» لابرا.
-                <button type="button" className="link link-btn" onClick={() => { undo.fn(); setUndo(null); }}>
-                  گەڕاندنەوە
-                </button>
-              </div>
-            ) : null}
+            {undoBar}
           </div>
         ) : (
-          <form className="cart-form" onSubmit={send} noValidate>
+          <form className="cart-form" onSubmit={ck.submit} noValidate>
             <div className="cart-body">
               <ul className="cart-list">
                 {items.map((i) => (
@@ -228,41 +203,8 @@ export default function CartDrawer({ open, onClose }: Props) {
                 ))}
               </ul>
 
-              {undo ? (
-                <div className="cart-undo" role="status">
-                  «{undo.name}» لابرا.
-                  <button type="button" className="link link-btn" onClick={() => { undo.fn(); setUndo(null); }}>
-                    گەڕاندنەوە
-                  </button>
-                </div>
-              ) : null}
-
-              <fieldset className="cart-customer">
-                <legend>زانیاری گەیاندن</legend>
-                {(
-                  [
-                    { k: "name", label: "ناوی کڕیار", type: "text", ac: "name" },
-                    { k: "phone", label: "ژمارە مۆبایل", type: "tel", ac: "tel", ph: "07xx xxx xxxx" },
-                    { k: "address", label: "ناونیشان (شار و گەڕەک)", type: "text", ac: "street-address", ph: "بۆ نموونە: هەولێر، گەڕەکی ئازادی" },
-                  ] as const
-                ).map((f) => (
-                  <label key={f.k} className={`field ${errs[f.k] ? "has-err" : ""}`}>
-                    <span>{f.label}</span>
-                    <input
-                      id={`cart-${f.k}`}
-                      type={f.type}
-                      autoComplete={f.ac}
-                      inputMode={f.type === "tel" ? "tel" : undefined}
-                      dir={f.type === "tel" ? "ltr" : undefined}
-                      placeholder={"ph" in f ? f.ph : undefined}
-                      value={customer[f.k]}
-                      aria-invalid={!!errs[f.k]}
-                      onChange={(e) => setField(f.k, e.target.value)}
-                    />
-                    {errs[f.k] ? <small className="field-err">{errs[f.k]}</small> : null}
-                  </label>
-                ))}
-              </fieldset>
+              {undoBar}
+              <CheckoutFields ck={ck} />
             </div>
 
             <footer className="cart-foot">
@@ -270,14 +212,13 @@ export default function CartDrawer({ open, onClose }: Props) {
                 <span>کۆی گشتی ({toKuDigits(count)} پارچە)</span>
                 <b aria-live="polite">{formatPriceKu(total)}</b>
               </div>
-              <button type="submit" className="btn-wa" disabled={!live.length}>
-                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
-                  />
-                </svg>
-                ناردنی داواکارییەکە بۆ واتسئاپ
+              {ck.serverErr ? (
+                <div className="toast err" role="alert">
+                  {ck.serverErr}
+                </div>
+              ) : null}
+              <button type="submit" className="btn-order" disabled={!live.length || ck.busy}>
+                {ck.busy ? "ناردن..." : "ناردنی داواکاری (تەواوکردنی کڕین)"}
               </button>
             </footer>
           </form>

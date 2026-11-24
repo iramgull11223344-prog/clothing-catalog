@@ -8,12 +8,16 @@ import ProductList from "@/components/admin/ProductList";
 import CatalogManager from "@/components/admin/CatalogManager";
 import QrTab from "@/components/admin/QrTab";
 import HeroSettingsTab from "@/components/admin/HeroSettingsTab";
+import OrdersTab from "@/components/admin/OrdersTab";
+import { ORDERS_CHANGED } from "@/lib/catalogEvents";
+import { toKuDigits } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { ADMIN_TAB_KEY, loadScroll, saveScroll } from "@/lib/draft";
 
-type Tab = "new" | "products" | "catalog" | "hero" | "qr";
+type Tab = "orders" | "new" | "products" | "catalog" | "hero" | "qr";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "orders", label: "داواکارییەکان" },
   { id: "new", label: "کاڵای نوێ" },
   { id: "products", label: "کاڵاکان" },
   { id: "catalog", label: "بەشەکان" },
@@ -141,6 +145,28 @@ export default function AdminPage() {
 
   const ready = !!userId && isAdmin === true;
 
+  // Number of new orders on the tab badge (every minute, on refocus and after changes).
+  const [newOrders, setNewOrders] = useState(0);
+  useEffect(() => {
+    if (!ready) return;
+    const count = () =>
+      supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "new")
+        .then(({ count: n, error }: any) => !error && setNewOrders(n ?? 0));
+    count();
+    const t = window.setInterval(count, 60000);
+    const vis = () => document.visibilityState === "visible" && count();
+    document.addEventListener("visibilitychange", vis);
+    window.addEventListener(ORDERS_CHANGED, count);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", vis);
+      window.removeEventListener(ORDERS_CHANGED, count);
+    };
+  }, [ready]);
+
   // ---- scroll: one position per tab, restored after reloads and tab switches
   const restoring = useRef(false);
   useEffect(() => {
@@ -211,6 +237,7 @@ export default function AdminPage() {
     new: () => <ProductForm />,
     products: () => <ProductList />,
     catalog: () => <CatalogManager />,
+    orders: () => <OrdersTab />,
     hero: () => <HeroSettingsTab />,
     qr: () => <QrTab />,
   };
@@ -256,6 +283,11 @@ export default function AdminPage() {
                   onClick={() => switchTab(t.id)}
                 >
                   {t.label}
+                  {t.id === "orders" && newOrders > 0 ? (
+                    <span className="tab-badge" aria-label={`${newOrders} داواکاری نوێ`}>
+                      {toKuDigits(newOrders)}
+                    </span>
+                  ) : null}
                 </button>
               ))}
               <button type="button" className="tab" onClick={logout}>

@@ -33,3 +33,9 @@ export function onProductsChanged(fn: () => void) {
     document.removeEventListener("visibilitychange", vis);
   };
 }
+
+// Orders changed (status, delete): the tab badge refreshes.
+export const ORDERS_CHANGED = "admin-orders-changed";
+export function notifyOrdersChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(ORDERS_CHANGED));
+}
