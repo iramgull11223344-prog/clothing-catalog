@@ -6,12 +6,13 @@ import { supabase } from "@/lib/supabase";
 import { formatPrice, formatPriceKu, toKuDigits } from "@/lib/format";
 import { effectivePrice, toPrice } from "@/lib/variantPrice";
 import { buildCartMessage, loadCustomer, saveCustomer, whatsappUrl, type Customer } from "@/lib/whatsapp";
-import { cartCount, cartTotal, clearCart, removeFromCart, replaceCart, setQty, useCart, type CartItem } from "@/lib/cart";
+import { cartCount, cartTotal, clearCart, getCart, patchCartItems, removeFromCart, setQty, useCart, type CartItem } from "@/lib/cart";
 
 type Props = { open: boolean; onClose: () => void };
 
 /** Re-reads prices and availability so the bag (and the WhatsApp message) is always current. */
-async function refreshPrices(list: CartItem[]) {
+async function refreshPrices() {
+  const list = getCart();
   const ids = Array.from(new Set(list.map((i) => i.productId)));
   if (!ids.length) return;
   const { data, error } = await supabase
@@ -20,8 +21,10 @@ async function refreshPrices(list: CartItem[]) {
     .in("id", ids);
   if (error || !data) return; // keep what we have when offline
   const byId = new Map((data as any[]).map((p) => [p.id, p]));
-  let changed = false;
-  const next = list.map((i) => {
+  // Only the price/availability of these items is patched into the CURRENT bag, so
+  // anything added or removed while this request was loading is kept as it is.
+  const patches = new Map<string, { price: number; unavailable: boolean }>();
+  list.forEach((i) => {
     const p = byId.get(i.productId);
     let price = i.price;
     let unavailable = false;
@@ -36,10 +39,9 @@ async function refreshPrices(list: CartItem[]) {
       else if (v && !v.is_available) unavailable = true;
       price = effectivePrice(v ? toPrice(v.price) : null, p.price);
     }
-    if (price !== i.price || unavailable !== !!i.unavailable) changed = true;
-    return { ...i, price, unavailable };
+    if (price !== i.price || unavailable !== !!i.unavailable) patches.set(i.key, { price, unavailable });
   });
-  if (changed) replaceCart(next);
+  patchCartItems(patches);
 }
 
 export default function CartDrawer({ open, onClose }: Props) {
@@ -60,7 +62,7 @@ export default function CartDrawer({ open, onClose }: Props) {
   // Open: refresh prices, lock page scroll, focus the close button, Esc closes.
   useEffect(() => {
     if (!open) return;
-    refreshPrices(items);
+    refreshPrices();
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const back = document.activeElement as HTMLElement | null;

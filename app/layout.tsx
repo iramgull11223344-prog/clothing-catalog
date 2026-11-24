@@ -4,6 +4,7 @@ import { Bodoni_Moda, Noto_Naskh_Arabic, Vazirmatn } from "next/font/google";
 import { cookies } from "next/headers";
 import { STORE_NAME, STORE_TAGLINE } from "@/lib/config";
 import { THEME_KEY, THEME_SCRIPT, isTheme } from "@/lib/theme";
+import CartRoot from "@/components/CartRoot";
 import "./globals.css";
 
 // Kurdish (Sorani) body text.
@@ -62,7 +63,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Shopping bag: one instance for the whole site, kept across page changes. */}
+        <CartRoot />
+      </body>
     </html>
   );
 }
