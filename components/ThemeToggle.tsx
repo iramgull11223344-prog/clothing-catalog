@@ -1,28 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { THEME_COOKIE_MAX_AGE, THEME_KEY, type Theme } from "@/lib/theme";
 
-// The initial theme is set before paint by the inline script in app/layout.tsx.
-export const THEME_KEY = "theme";
+function apply(theme: Theme, animate: boolean) {
+  const root = document.documentElement;
+  if (animate) {
+    root.classList.add("theme-anim");
+    window.setTimeout(() => root.classList.remove("theme-anim"), 400);
+  }
+  root.dataset.theme = theme;
+  root.style.colorScheme = theme;
+}
 
+function save(theme: Theme) {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {}
+  document.cookie = `${THEME_KEY}=${theme}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; samesite=lax`;
+  delete document.documentElement.dataset.themeAuto;
+}
+
+// The first theme is set before paint by the inline script in app/layout.tsx.
 export default function ThemeToggle() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
     setDark(document.documentElement.dataset.theme === "dark");
+
+    // Visitors who never chose follow their device setting live.
+    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => {
+      if (document.documentElement.dataset.themeAuto !== "1") return;
+      apply(e.matches ? "dark" : "light", true);
+      setDark(e.matches);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   function toggle() {
-    const next = dark ? "light" : "dark";
-    const root = document.documentElement;
-    root.classList.add("theme-anim");
-    root.dataset.theme = next;
-    root.style.colorScheme = next;
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {}
+    const next: Theme = dark ? "light" : "dark";
+    apply(next, true);
+    save(next);
     setDark(!dark);
-    window.setTimeout(() => root.classList.remove("theme-anim"), 400);
   }
 
   return (

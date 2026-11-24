@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import ProductCard from "@/components/ProductCard";
+import CategoryTabs from "@/components/CategoryTabs";
 import { toKuDigits } from "@/lib/format";
 
 type Tab = { id: string; name: string };
@@ -51,21 +52,7 @@ export default function FilterView({ products, tabs, by, basePath, initial, eyeb
         <span className="count">{toKuDigits(list.length)} کاڵا</span>
       </div>
 
-      {tabs.length > 0 ? (
-        <div className="tabs-line" role="group" aria-label="بەشەکان">
-          {[{ id: "all", name: "هەموو" }, ...tabs].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={active === t.id ? "on" : ""}
-              aria-pressed={active === t.id}
-              onClick={() => select(t.id)}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {tabs.length > 0 ? <CategoryTabs tabs={tabs} active={active} onSelect={select} /> : null}
 
       {list.length === 0 ? (
         <div className="empty">

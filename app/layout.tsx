@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Bodoni_Moda, Noto_Naskh_Arabic, Vazirmatn } from "next/font/google";
+import { cookies } from "next/headers";
 import { STORE_NAME, STORE_TAGLINE } from "@/lib/config";
+import { THEME_KEY, THEME_SCRIPT, isTheme } from "@/lib/theme";
 import "./globals.css";
 
 // Kurdish (Sorani) body text.
@@ -42,15 +44,18 @@ export const viewport: Viewport = {
   ],
 };
 
-// Runs before paint: saved choice (localStorage "theme"), otherwise the system setting.
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");if(t!=="dark"&&t!=="light"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}var d=document.documentElement;d.dataset.theme=t;d.style.colorScheme=t}catch(e){}})();`;
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // A saved choice is rendered by the server too, so the HTML already has the right theme.
+  const saved = (await cookies()).get(THEME_KEY)?.value;
+  const theme = isTheme(saved) ? saved : "light";
+
   return (
     <html
       lang="ckb"
       dir="rtl"
-      data-theme="light"
+      data-theme={theme}
+      style={{ colorScheme: theme }}
       className={`${body.variable} ${serifKu.variable} ${serifLogo.variable}`}
       suppressHydrationWarning
     >

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
+import CategoryTabs from "@/components/CategoryTabs";
 
 type Props = {
   products: any[];
@@ -17,21 +18,7 @@ export default function NewArrivals({ products, cats }: Props) {
 
   return (
     <>
-      {usedCats.length > 0 ? (
-        <div className="tabs-line" role="group" aria-label="بەشەکان">
-          {[{ id: "all", name: "هەموو" }, ...usedCats].map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={active === c.id ? "on" : ""}
-              aria-pressed={active === c.id}
-              onClick={() => setActive(c.id)}
-            >
-              {c.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {usedCats.length > 0 ? <CategoryTabs tabs={usedCats} active={active} onSelect={setActive} /> : null}
 
       {list.length === 0 ? (
         <div className="empty">
