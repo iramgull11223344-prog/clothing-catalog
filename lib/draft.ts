@@ -7,7 +7,7 @@ const DB_NAME = "catalog-draft";
 const STORE = "files";
 
 // `custom` = the unsaved text in the "قەبارەی تر" input (optional for older drafts).
-export type DraftColor = { id: string; name: string; hex: string; sizes: string[]; custom?: string };
+export type DraftColor = { id: string; name: string; hex: string; sizes: string[]; custom?: string; price?: string };
 export type Draft = {
   catId: string;
   subId: string;

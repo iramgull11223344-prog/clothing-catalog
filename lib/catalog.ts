@@ -23,7 +23,8 @@ export async function getNavCats(): Promise<NavCat[]> {
   }));
 }
 
-export const CARD_SELECT = "id,name,price,main_image_url,subcategory_id,product_variants(color_hex,color_name),subcategories(category_id)";
+export const CARD_SELECT =
+  "id,name,price,main_image_url,subcategory_id,product_variants(color_hex,color_name,price,image_url,sort_order),subcategories(category_id)";
 
 /** Name key for comparing: trims, collapses spaces, Unicode-normalises and ignores case ("Polo " = "polo"). */
 export function nameKey(name: string | null | undefined): string {

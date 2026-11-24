@@ -9,6 +9,7 @@ import { nameKey } from "@/lib/catalog";
 import { usePalette } from "@/lib/usePalette";
 import {
   ADMIN_PRODUCT_SELECT,
+  colorPricesValid,
   colorsToRows,
   isUsedColor,
   variantsToColors,
@@ -56,7 +57,7 @@ export default function ProductEditor({ productId, onClose }: Props) {
   const [colors, setColors] = useState<ColorRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [restored, setRestored] = useState(false);
-  const [errs, setErrs] = useState<Partial<Record<"name" | "sub" | "price" | "photo", string>>>({});
+  const [errs, setErrs] = useState<Partial<Record<"name" | "sub" | "price" | "photo" | "colors", string>>>({});
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
@@ -108,7 +109,7 @@ export default function ProductEditor({ productId, onClose }: Props) {
         const rows: ColorRow[] = [];
         for (const c of d.colors) {
           const f = await getFile(fileKey(`color:${c.id}`));
-          rows.push({ ...c, file: f, preview: f ? URL.createObjectURL(f) : c.imageUrl ?? null });
+          rows.push({ ...c, price: c.price ?? "", file: f, preview: f ? URL.createObjectURL(f) : c.imageUrl ?? null });
         }
         setColors(rows.length ? rows : [newColor()]);
         setRestored(true);
@@ -189,8 +190,9 @@ export default function ProductEditor({ productId, onClose }: Props) {
     if (!subId) found.sub = "بەشی لاوەکی هەڵبژێرە";
     if (price.trim() === "" || Number.isNaN(priceNum) || priceNum < 0) found.price = "نرخ دروست نییە (تەنها ژمارە)";
     if (!mainFile && !mainUrl && !used.some((c) => c.file || c.imageUrl)) found.photo = "لانی کەم یەک وێنە پێویستە";
+    if (!colorPricesValid(used)) found.colors = "نرخی تایبەتی یەکێک لە ڕەنگەکان دروست نییە";
     setErrs(found);
-    const first = (["photo", "name", "sub", "price"] as const).find((k) => found[k]);
+    const first = (["photo", "name", "sub", "price", "colors"] as const).find((k) => found[k]);
     if (first) {
       const el = document.getElementById(`pe-${first}`);
       el?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -337,7 +339,7 @@ export default function ProductEditor({ productId, onClose }: Props) {
           {errs.sub ? <small className="field-err">{errs.sub}</small> : null}
         </div>
         <label className={`field ${errs.price ? "has-err" : ""}`} id="pe-price">
-          <span>نرخ (دینار)</span>
+          <span>نرخی گشتی (دینار)</span>
           <input
             type="number"
             inputMode="numeric"
@@ -357,8 +359,10 @@ export default function ProductEditor({ productId, onClose }: Props) {
         </label>
       </div>
 
-      <div className="box">
+      <div className={`box ${errs.colors ? "has-err" : ""}`} id="pe-colors">
         <h3>ڕەنگ و قەبارەکان ({colors.filter(isUsedColor).length})</h3>
+        <p className="field-note">ئەگەر ڕەنگێک نرخی تایبەتی نەبێت، نرخی گشتیی کاڵاکە ({price || "—"} د.ع) بەکاردێت.</p>
+        {errs.colors ? <small className="field-err">{errs.colors}</small> : null}
         {colors.map((c) => (
           <ColorCard
             key={c.id}

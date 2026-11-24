@@ -6,8 +6,15 @@ import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ color?: string }>;
+}) {
   const { id } = await params;
+  const { color } = await searchParams;
 
   const { data: p } = await supabase
     .from("products")
@@ -33,6 +40,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           mainImage={p.main_image_url}
           variants={variants}
           crumbs={[cat?.name, sub?.name].filter(Boolean).join(" / ")}
+          initialColor={color}
         />
       </main>
       <Footer />

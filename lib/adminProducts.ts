@@ -4,6 +4,7 @@ import { uid } from "@/lib/image";
 import { nameKey } from "@/lib/catalog";
 import { colorKey } from "@/lib/colors";
 import { rank, type ColorRow } from "@/components/admin/ColorCard";
+import { isValidPriceInput, toPrice } from "@/lib/variantPrice";
 
 export type DbVariant = {
   id?: string;
@@ -13,6 +14,7 @@ export type DbVariant = {
   image_url: string | null;
   is_available: boolean;
   sort_order: number;
+  price?: number | string | null;
 };
 
 export type AdminProduct = {
@@ -29,7 +31,7 @@ export type AdminProduct = {
 };
 
 export const ADMIN_PRODUCT_SELECT =
-  "id,name,price,description,main_image_url,is_active,subcategory_id,created_at,subcategories(id,name,category_id,categories(name)),product_variants(id,color_name,color_hex,size,image_url,is_available,sort_order)";
+  "id,name,price,description,main_image_url,is_active,subcategory_id,created_at,subcategories(id,name,category_id,categories(name)),product_variants(id,color_name,color_hex,size,image_url,is_available,sort_order,price)";
 
 export async function loadAdminProducts(): Promise<AdminProduct[] | null> {
   const { data, error } = await supabase.from("products").select(ADMIN_PRODUCT_SELECT).order("created_at", { ascending: true });
@@ -62,10 +64,12 @@ export function variantsToColors(variants: DbVariant[]): ColorRow[] {
         sizes: [],
         unavailable: [],
         custom: "",
+        price: "",
       };
       map.set(k, c);
     }
     if (!c.imageUrl && v.image_url) c.imageUrl = c.preview = v.image_url;
+    if (!c.price && toPrice(v.price) !== null) c.price = String(toPrice(v.price));
     if (v.size && !c.sizes.includes(v.size)) {
       c.sizes.push(v.size);
       if (!v.is_available) c.unavailable!.push(v.size);
@@ -92,9 +96,13 @@ export function colorsToRows(
       image_url: imageFor(c, ci),
       is_available: s ? !(c.unavailable ?? []).includes(s) : true,
       sort_order: firstOrder + ci * 100 + si,
+      price: toPrice(c.price),
     }))
   );
 }
+
+/** True when every colour's own-price field is empty or a valid number. */
+export const colorPricesValid = (colors: ColorRow[]) => colors.every((c) => isValidPriceInput(c.price));
 
 /** A colour card counts when it has a name, a photo or sizes. */
 export const isUsedColor = (c: ColorRow) => !!(c.name.trim() || c.file || c.imageUrl || c.sizes.length);

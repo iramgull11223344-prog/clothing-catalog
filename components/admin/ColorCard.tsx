@@ -4,6 +4,7 @@ import { uid } from "@/lib/image";
 import PhotoPicker from "./PhotoPicker";
 import ColorPicker from "./ColorPicker";
 import type { ColorOption } from "@/lib/colors";
+import { isValidPriceInput } from "@/lib/variantPrice";
 
 export type ColorRow = {
   id: string;
@@ -17,6 +18,8 @@ export type ColorRow = {
   imageUrl?: string | null;
   /** Sizes marked as not available in the database (kept as they are when editing). */
   unavailable?: string[];
+  /** Own price for this colour ("" = use the product's price). */
+  price?: string;
 };
 
 
@@ -30,7 +33,7 @@ export function rank(s: string) {
 }
 
 export function newColor(sizes: string[] = []): ColorRow {
-  return { id: uid(), name: "", hex: "#111111", file: null, preview: null, sizes, custom: "" };
+  return { id: uid(), name: "", hex: "#111111", file: null, preview: null, sizes, custom: "", price: "" };
 }
 
 export default function ColorCard({
@@ -86,6 +89,20 @@ export default function ColorCard({
           </button>
         ) : null}
       </div>
+
+      <label className={`field ${isValidPriceInput(color.price) ? "" : "has-err"}`}>
+        <span>نرخی تایبەت بۆ ئەم ڕەنگە (ئارەزوومەندانە)</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min="0"
+          placeholder="بەتاڵ = نرخی گشتیی کاڵاکە"
+          value={color.price ?? ""}
+          aria-invalid={!isValidPriceInput(color.price)}
+          onChange={(e) => onChange({ price: e.target.value })}
+        />
+        {isValidPriceInput(color.price) ? null : <small className="field-err">نرخ دروست نییە (تەنها ژمارە)</small>}
+      </label>
 
       <div className="field">
         <span>وێنەی ئەم ڕەنگە</span>

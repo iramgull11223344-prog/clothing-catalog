@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import OrderModal from "@/components/OrderModal";
 import { formatPrice, formatPriceKu } from "@/lib/format";
+import { effectivePrice, toPrice } from "@/lib/variantPrice";
 
 type Variant = {
   color_name: string | null;
@@ -10,6 +11,7 @@ type Variant = {
   size: string | null;
   image_url: string | null;
   is_available: boolean;
+  price?: number | string | null;
 };
 
 type ColorGroup = {
@@ -17,7 +19,9 @@ type ColorGroup = {
   name: string;
   hex: string;
   image: string | null;
-  sizes: { size: string; available: boolean }[];
+  /** Own price of this colour (null = product price). */
+  price: number | null;
+  sizes: { size: string; available: boolean; price: number | null }[];
 };
 
 type Props = {
@@ -27,25 +31,30 @@ type Props = {
   mainImage: string | null;
   variants: Variant[];
   crumbs?: string;
+  /** Colour chosen on the product card ("name|hex"). */
+  initialColor?: string;
 };
 
-export default function ProductView({ name, description, price, mainImage, variants, crumbs }: Props) {
+export default function ProductView({ name, description, price, mainImage, variants, crumbs, initialColor }: Props) {
   const colors = useMemo(() => {
     const map = new Map<string, ColorGroup>();
     for (const v of variants) {
       const key = `${v.color_name ?? ""}|${v.color_hex ?? ""}`;
       let g = map.get(key);
       if (!g) {
-        g = { key, name: v.color_name ?? "", hex: v.color_hex ?? "#d6d3d1", image: v.image_url, sizes: [] };
+        g = { key, name: v.color_name ?? "", hex: v.color_hex ?? "#d6d3d1", image: v.image_url, price: toPrice(v.price), sizes: [] };
         map.set(key, g);
       }
       if (!g.image && v.image_url) g.image = v.image_url;
-      if (v.size) g.sizes.push({ size: v.size, available: v.is_available });
+      if (g.price === null && toPrice(v.price) !== null) g.price = toPrice(v.price);
+      if (v.size) g.sizes.push({ size: v.size, available: v.is_available, price: toPrice(v.price) });
     }
     return Array.from(map.values());
   }, [variants]);
 
-  const [colorKey, setColorKey] = useState<string | undefined>(colors[0]?.key);
+  const [colorKey, setColorKey] = useState<string | undefined>(
+    colors.some((c) => c.key === initialColor) ? initialColor : colors[0]?.key
+  );
   const current = colors.find((c) => c.key === colorKey) ?? colors[0];
   const image = current?.image ?? mainImage;
 
@@ -65,6 +74,10 @@ export default function ProductView({ name, description, price, mainImage, varia
         ? pickedSize
         : null;
   const soldOut = allSizes.length > 0 && availableSizes.length === 0;
+
+  // Price of what is selected: size's own price → colour's own price → product price.
+  const sizePrice = size ? allSizes.find((s) => s.size === size)?.price ?? null : null;
+  const currentPrice = effectivePrice(sizePrice ?? current?.price ?? null, price);
 
   function pickColor(key: string) {
     setColorKey(key);
@@ -122,7 +135,9 @@ export default function ProductView({ name, description, price, mainImage, varia
       <div className="pv-info">
         {crumbs ? <div className="crumbs">{crumbs}</div> : null}
         <h1>{name}</h1>
-        <div className="pv-price">{formatPriceKu(price)}</div>
+        <div className="pv-price" aria-live="polite">
+          {formatPriceKu(currentPrice)}
+        </div>
         {description ? <p className="desc">{description}</p> : null}
 
         {hasColors ? (
@@ -190,7 +205,7 @@ export default function ProductView({ name, description, price, mainImage, varia
           productName={name}
           color={hasColors ? current?.name || current?.hex || "" : ""}
           size={size ?? ""}
-          price={formatPrice(price)}
+          price={formatPrice(currentPrice)}
           onClose={closeOrder}
         />
       ) : null}

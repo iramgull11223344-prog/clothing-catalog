@@ -110,7 +110,7 @@ export default function ProductList() {
   async function merge(p: AdminProduct, t: AdminProduct) {
     const priceNote =
       Number(p.price) !== Number(t.price)
-        ? `\n\nئاگاداری: نرخەکان جیاوازن (${formatPrice(p.price)} و ${formatPrice(t.price)}). نرخی «${formatPrice(t.price)}» دەمێنێتەوە.`
+        ? `\n\nنرخەکان جیاوازن: ڕەنگەکانی ئەم کاڵایە نرخی خۆیان (${formatPrice(p.price)}) وەک نرخی تایبەت دەپارێزن، و نرخی گشتیی «${t.name}» (${formatPrice(t.price)}) دەمێنێتەوە.`
         : "";
     if (
       !window.confirm(
@@ -137,6 +137,8 @@ export default function ProductList() {
           image_url: v.image_url ?? p.main_image_url,
           is_available: v.is_available,
           sort_order: base + i,
+          // keep what the customer paid for that colour before the merge
+          price: v.price ?? (Number(p.price) !== Number(t.price) ? p.price : null),
         }));
       if (rows.length) {
         const { error: e1 } = await supabase.from("product_variants").insert(rows);
@@ -185,6 +187,10 @@ export default function ProductList() {
                 {productPath(p)}
                 {p.is_active ? "" : " · شاراوە"}
               </small>
+              {(() => {
+                const own = Array.from(new Set((p.product_variants ?? []).map((v) => v.price).filter((x) => x !== null && x !== undefined).map(Number)));
+                return own.length ? <small className="field-note">نرخی تایبەتی ڕەنگەکان: {own.map((n) => formatPrice(n)).join("، ")}</small> : null;
+              })()}
               <span className="ppick-dots" title={cn.map((c) => c.name).join("، ")}>
                 {cn.map((c) => (
                   <span key={c.name + c.hex} className="cdot" style={{ background: c.hex }} />

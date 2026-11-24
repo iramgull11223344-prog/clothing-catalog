@@ -13,7 +13,8 @@ import ProductPicker, { productPath, colorNames } from "./ProductPicker";
 import { usePalette } from "@/lib/usePalette";
 import { nameKey } from "@/lib/catalog";
 import { formatPrice } from "@/lib/format";
-import { colorsToRows, comboKey, isUsedColor, loadAdminProducts, type AdminProduct } from "@/lib/adminProducts";
+import { toPrice } from "@/lib/variantPrice";
+import { colorPricesValid, colorsToRows, comboKey, isUsedColor, loadAdminProducts, type AdminProduct } from "@/lib/adminProducts";
 import { removeDraft } from "@/lib/draft";
 
 type Cat = { id: string; name: string; is_active?: boolean; subcategories: SubOption[] };
@@ -78,7 +79,7 @@ export default function ProductForm() {
           const rows: ColorRow[] = [];
           for (const c of d.colors) {
             const f = await getFile(`color:${c.id}`);
-            rows.push({ ...c, custom: c.custom ?? "", file: f, preview: f ? URL.createObjectURL(f) : null });
+            rows.push({ ...c, custom: c.custom ?? "", price: c.price ?? "", file: f, preview: f ? URL.createObjectURL(f) : null });
           }
           if (alive) setColors(rows);
         }
@@ -103,7 +104,7 @@ export default function ProductForm() {
       name,
       desc,
       price,
-      colors: colors.map(({ id, name, hex, sizes, custom }) => ({ id, name, hex, sizes, custom })),
+      colors: colors.map(({ id, name, hex, sizes, custom, price }) => ({ id, name, hex, sizes, custom, price })),
       mergeInto: mergeInto || undefined,
     });
   }, [loaded, catId, subId, name, desc, price, colors, mergeInto]);
@@ -223,6 +224,11 @@ export default function ProductForm() {
     const priceNum = Number(price);
     const used = colors.filter(isUsedColor);
 
+    if (!colorPricesValid(used)) {
+      setErrs({ colors: "نرخی تایبەتی یەکێک لە ڕەنگەکان دروست نییە" });
+      document.getElementById("pf-colors")?.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
     if (target) return saveIntoExisting(target, used);
 
     const found: typeof errs = {};
@@ -275,6 +281,7 @@ export default function ProductForm() {
           image_url: colorUrls[ci] ?? mainUrl,
           is_available: true,
           sort_order: ci * 100 + si,
+          price: toPrice(c.price),
         }))
       );
       if (rows.length) {
@@ -493,7 +500,7 @@ export default function ProductForm() {
           {staleNote && !errs.sub ? <small className="field-note">{staleNote}</small> : null}
         </div>
         <label className={`field ${errs.price ? "has-err" : ""}`} id="pf-price">
-          <span>نرخ (دینار)</span>
+          <span>نرخی گشتی (دینار)</span>
           <input
             type="number"
             inputMode="numeric"
@@ -517,6 +524,11 @@ export default function ProductForm() {
 
       <div className={`box ${errs.colors ? "has-err" : ""}`} id="pf-colors">
         <h3>{target ? "ڕەنگ و قەبارە نوێیەکان" : "ڕەنگ و قەبارەکان"}</h3>
+        <p className="field-note">
+          {target
+            ? `ئەگەر نرخی تایبەت نەنووسیت، نرخی گشتیی «${target.name}» (${formatPrice(target.price)}) بەکاردێت.`
+            : "ئەگەر ڕەنگێک نرخی تایبەتی نەبێت، نرخی گشتیی کاڵاکە بەکاردێت."}
+        </p>
         {errs.colors ? <small className="field-err">{errs.colors}</small> : null}
         {colors.map((c) => (
           <ColorCard
