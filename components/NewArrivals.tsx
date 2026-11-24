@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import ProductCard from "@/components/ProductCard";
 import CategoryTabs from "@/components/CategoryTabs";
@@ -13,7 +13,10 @@ type Props = {
 // Category tabs that filter the new-arrivals grid in place.
 export default function NewArrivals({ products, cats }: Props) {
   const [active, setActive] = useState("all");
-  const usedCats = cats.filter((c) => products.some((p) => p.subcategories?.category_id === c.id));
+  const usedCats = useMemo(
+    () => cats.filter((c) => products.some((p) => p.subcategories?.category_id === c.id)),
+    [cats, products]
+  );
   const list = (active === "all" ? products : products.filter((p) => p.subcategories?.category_id === active)).slice(0, 8);
 
   return (

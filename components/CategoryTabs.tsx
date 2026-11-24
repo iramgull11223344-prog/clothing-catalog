@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 
 type Tab = { id: string; name: string };
 
@@ -35,8 +35,31 @@ function wavePath(width: number, half: number) {
   ].join(" ");
 }
 
-export default function CategoryTabs({ tabs, active, onSelect, label = "بەشەکان" }: Props) {
+// Same curve as the CSS transform transition: cubic-bezier(0.22, 1, 0.36, 1).
+const GLIDE_MS = 450;
+function bezier(x1: number, y1: number, x2: number, y2: number) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (t: number) => ((ax * t + bx) * t + cx) * t;
+  const sy = (t: number) => ((ay * t + by) * t + cy) * t;
+  const dx = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x: number) => {
+    let t = x;
+    for (let i = 0; i < 6; i++) {
+      const d = dx(t);
+      if (Math.abs(d) < 1e-6) break;
+      t -= (sx(t) - x) / d;
+    }
+    return sy(Math.min(1, Math.max(0, t)));
+  };
+}
+const ease = bezier(0.22, 1, 0.36, 1);
+
+function CategoryTabs({ tabs, active, onSelect, label = "بەشەکان" }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const pathRef = useRef<SVGPathElement>(null);
+  const drawn = useRef<{ width: number; half: number } | null>(null);
+  const tween = useRef(0);
   const btnRefs = useRef(new Map<string, HTMLButtonElement>());
   const [geo, setGeo] = useState<{ width: number; x: number; half: number } | null>(null);
   const [ready, setReady] = useState(false);
@@ -61,6 +84,34 @@ export default function CategoryTabs({ tabs, active, onSelect, label = "بەشە
     return () => ro.disconnect();
   }, [measure]);
 
+  // Draw the wave. Its position glides with the CSS transform; its width (labels differ)
+  // morphs over the same 0.45s with the same curve, so nothing jumps.
+  useLayoutEffect(() => {
+    const path = pathRef.current;
+    if (!geo || !path) return;
+    cancelAnimationFrame(tween.current);
+    const from = drawn.current;
+    // (The track width can change by a few px when the active label turns bold; that is
+    // fine to apply at once — only the arch width needs to morph.)
+    if (!ready || !from || Math.abs(from.half - geo.half) < 0.5) {
+      path.setAttribute("d", wavePath(geo.width, geo.half));
+      drawn.current = { width: geo.width, half: geo.half };
+      return;
+    }
+    const start = performance.now();
+    const h0 = from.half;
+    const h1 = geo.half;
+    const step = (now: number) => {
+      const k = ease(Math.min(1, (now - start) / GLIDE_MS));
+      const h = h0 + (h1 - h0) * k;
+      path.setAttribute("d", wavePath(geo.width, h));
+      drawn.current = { width: geo.width, half: h };
+      if (k < 1) tween.current = requestAnimationFrame(step);
+    };
+    tween.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(tween.current);
+  }, [geo, ready]);
+
   // Enable the glide only after the first placement (no slide-in on load).
   useLayoutEffect(() => {
     if (geo && !ready) {
@@ -76,6 +127,8 @@ export default function CategoryTabs({ tabs, active, onSelect, label = "بەشە
   }
 
   const all = [{ id: "all", name: "هەموو" }, ...tabs];
+  // Note: this component stays mounted while tabs change; only the transform value and the
+  // path's width are updated, so the wave visibly travels from the old tab to the new one.
 
   return (
     <div className="ltabs" role="group" aria-label={label}>
@@ -107,7 +160,7 @@ export default function CategoryTabs({ tabs, active, onSelect, label = "بەشە
               aria-hidden="true"
               focusable="false"
             >
-              <path className="ltabs-line" d={wavePath(geo.width, geo.half)} />
+              <path ref={pathRef} className="ltabs-line" />
               <circle className="ltabs-dot" cx={geo.width} cy={TOP} r="3.2" />
             </svg>
           ) : null}
@@ -116,3 +169,6 @@ export default function CategoryTabs({ tabs, active, onSelect, label = "بەشە
     </div>
   );
 }
+
+// Memoised: re-renders only when the tab list or the active tab changes, not on every grid update.
+export default memo(CategoryTabs);
