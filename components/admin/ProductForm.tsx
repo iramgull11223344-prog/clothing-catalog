@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { uploadImage, uid } from "@/lib/image";
 import { loadDraft, saveDraft, clearDraft, putFile, getFile, clearScroll } from "@/lib/draft";
 import PhotoPicker from "./PhotoPicker";
+import ColorPicker from "./ColorPicker";
+import { PRESET_COLORS, readColorCache, writeColorCache, colorKey, type ColorOption } from "@/lib/colors";
+import { removeDraft } from "@/lib/draft";
 
 type Cat = { id: string; name: string; subcategories: { id: string; name: string }[] };
 type ColorRow = {
@@ -18,21 +21,6 @@ type ColorRow = {
   custom: string; // text typed in "قەبارەی تر" but not added yet
 };
 
-const PRESETS: { name: string; hex: string }[] = [
-  { name: "ڕەش", hex: "#111111" },
-  { name: "سپی", hex: "#ffffff" },
-  { name: "سوور", hex: "#d62828" },
-  { name: "شین", hex: "#1d4ed8" },
-  { name: "سەوز", hex: "#16a34a" },
-  { name: "زەرد", hex: "#facc15" },
-  { name: "پەمەیی", hex: "#f472b6" },
-  { name: "نارنجی", hex: "#f97316" },
-  { name: "مۆر", hex: "#7c3aed" },
-  { name: "قاوەیی", hex: "#7c4a2d" },
-  { name: "خۆڵەمێشی", hex: "#9ca3af" },
-  { name: "کرێم", hex: "#f5e9d4" },
-  { name: "شینی تۆخ", hex: "#1e3a5f" },
-];
 
 const SIZES = ["S", "M", "L", "XL", "XXL", "3XL"];
 
@@ -52,11 +40,15 @@ function ColorCard({
   onChange,
   onRemove,
   canRemove,
+  palette,
+  onColorCreated,
 }: {
   color: ColorRow;
   onChange: (patch: Partial<ColorRow>) => void;
   onRemove: () => void;
   canRemove: boolean;
+  palette: ColorOption[];
+  onColorCreated: (c: ColorOption) => void;
 }) {
   const custom = color.custom;
   const setCustom = (v: string) => onChange({ custom: v });
@@ -74,18 +66,13 @@ function ColorCard({
 
   return (
     <div className="color-card">
-      <div className="presets">
-        {PRESETS.map((p) => (
-          <button
-            key={p.hex}
-            type="button"
-            title={p.name}
-            className="preset"
-            style={{ background: p.hex }}
-            onClick={() => onChange({ name: p.name, hex: p.hex })}
-          />
-        ))}
-      </div>
+      <ColorPicker
+        draftKey={color.id}
+        palette={palette}
+        selected={{ name: color.name, hex: color.hex }}
+        onPick={(c) => onChange({ name: c.name, hex: c.hex })}
+        onCreated={onColorCreated}
+      />
 
       <div className="color-head">
         <input type="color" value={color.hex} onChange={(e) => onChange({ hex: e.target.value })} />
@@ -172,6 +159,32 @@ export default function ProductForm() {
   const [submitErr, setSubmitErr] = useState<string | null>(null);
   const clearErr = (k: keyof typeof errs) => setErrs((e) => (e[k] ? { ...e, [k]: undefined } : e));
   const [loaded, setLoaded] = useState(false);
+  // Custom colours from Supabase (cached locally so the list is complete instantly).
+  const [customColors, setCustomColors] = useState<ColorOption[]>(() => readColorCache());
+  const palette = useMemo(() => {
+    const seen = new Set(PRESET_COLORS.map((c) => colorKey(c.name)));
+    return [...customColors.filter((c) => !seen.has(colorKey(c.name))), ...PRESET_COLORS];
+  }, [customColors]);
+  const addCustomColor = useCallback((c: ColorOption) => {
+    setCustomColors((list) => {
+      const next = [c, ...list.filter((x) => x.id !== c.id)];
+      writeColorCache(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    supabase
+      .from("custom_colors")
+      .select("id,name,hex")
+      .order("created_at", { ascending: false })
+      .then(({ data, error }: any) => {
+        if (error || !data) return; // keep the cached list on a network hiccup
+        const list: ColorOption[] = data.map((c: any) => ({ id: c.id, name: c.name, hex: c.hex, custom: true }));
+        setCustomColors(list);
+        writeColorCache(list);
+      });
+  }, []);
   const [restored, setRestored] = useState(false);
 
   // Restore the auto-saved draft (text from localStorage, photos from IndexedDB).
@@ -242,6 +255,7 @@ export default function ProductForm() {
 
   const removeColor = (id: string) => {
     putFile(`color:${id}`, null);
+    removeDraft(`new-color:${id}`);
     setColors((cs) => cs.filter((x) => x.id !== id));
   };
 
@@ -453,6 +467,8 @@ export default function ProductForm() {
             canRemove={colors.length > 1}
             onChange={(patch) => patchColor(c.id, patch)}
             onRemove={() => removeColor(c.id)}
+            palette={palette}
+            onColorCreated={addCustomColor}
           />
         ))}
         <button

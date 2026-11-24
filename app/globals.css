@@ -388,6 +388,25 @@ input[type="color"] { width: 44px; height: 44px; padding: 2px; border: 1px solid
 .color-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .preset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; }
+/* colour picker (admin) */
+.cpick { margin-bottom: 14px; }
+.cpick-top { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.cpick-top .cpick-search { flex: 1; min-width: 0; height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--field); font-size: 15px; outline: none; }
+.cpick-top .cpick-search:focus { border-color: var(--ink); }
+.cpick-new { flex: none; white-space: nowrap; }
+.cpick-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 196px; overflow-y: auto; padding: 2px; overscroll-behavior: contain; }
+.cchip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px 5px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--field); color: var(--ink); font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.cchip:hover { border-color: var(--line-strong); }
+.cchip.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); font-weight: 600; }
+.cchip.is-custom { border-style: dashed; }
+.cdot { flex: none; width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--ring); }
+.cpick-empty { color: var(--ink-2); font-size: 13px; padding: 6px 2px; }
+.cpick-form { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 10px; background: var(--surface); }
+.cpick-form-row { display: flex; gap: 8px; align-items: center; }
+.cpick-form-row input[type="text"] { flex: 1; min-width: 0; }
+.cpick-preview { display: flex; align-items: center; gap: 8px; margin: 8px 2px 4px; font-size: 13px; color: var(--ink-2); font-family: ui-monospace, monospace; }
+.cpick-form-btns { display: flex; gap: 8px; margin-top: 10px; }
+.btn-ink { background: var(--ink); color: var(--on-ink); border-color: var(--ink); font-weight: 600; }
 .size-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .size-chip { padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--field); cursor: pointer; font-size: 14px; }
 .size-chip.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
