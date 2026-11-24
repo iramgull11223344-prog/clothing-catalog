@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { uploadImage, uid } from "@/lib/image";
+import { loadDraft, saveDraft, clearDraft, putFile, getFile } from "@/lib/draft";
 import PhotoPicker from "./PhotoPicker";
 
 type Cat = { id: string; name: string; subcategories: { id: string; name: string }[] };
@@ -164,6 +165,58 @@ export default function ProductForm() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
   const [msg, setMsg] = useState<{ t: "ok" | "err"; m: string } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [restored, setRestored] = useState(false);
+
+  // Restore the auto-saved draft (text from localStorage, photos from IndexedDB).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const d = loadDraft();
+      if (d) {
+        setCatId(d.catId || "");
+        setSubId(d.subId || "");
+        setName(d.name || "");
+        setDesc(d.desc || "");
+        setPrice(d.price || "");
+
+        const main = await getFile("main");
+        if (main && alive) {
+          setMainFile(main);
+          setMainPreview(URL.createObjectURL(main));
+        }
+        if (d.colors?.length) {
+          const rows: ColorRow[] = [];
+          for (const c of d.colors) {
+            const f = await getFile(`color:${c.id}`);
+            rows.push({ ...c, file: f, preview: f ? URL.createObjectURL(f) : null });
+          }
+          if (alive) setColors(rows);
+        }
+        const hasContent =
+          !!(d.name || d.desc || d.price || main) ||
+          (d.colors ?? []).some((c) => c.name || c.sizes?.length);
+        if (alive && hasContent) setRestored(true);
+      }
+      if (alive) setLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Auto-save every change.
+  useEffect(() => {
+    if (!loaded) return;
+    saveDraft({
+      catId,
+      subId,
+      name,
+      desc,
+      price,
+      colors: colors.map(({ id, name, hex, sizes }) => ({ id, name, hex, sizes })),
+    });
+  }, [loaded, catId, subId, name, desc, price, colors]);
 
   useEffect(() => {
     supabase
@@ -176,8 +229,21 @@ export default function ProductForm() {
 
   const subs = cats.find((c) => c.id === catId)?.subcategories ?? [];
 
-  const patchColor = (id: string, patch: Partial<ColorRow>) =>
+  const patchColor = (id: string, patch: Partial<ColorRow>) => {
+    if (patch.file) putFile(`color:${id}`, patch.file);
     setColors((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  };
+
+  const removeColor = (id: string) => {
+    putFile(`color:${id}`, null);
+    setColors((cs) => cs.filter((x) => x.id !== id));
+  };
+
+  const pickMain = (f: File) => {
+    putFile("main", f);
+    setMainFile(f);
+    setMainPreview(URL.createObjectURL(f));
+  };
 
   const reset = () => {
     setName("");
@@ -186,6 +252,8 @@ export default function ProductForm() {
     setMainFile(null);
     setMainPreview(null);
     setColors([newColor()]);
+    setRestored(false);
+    clearDraft();
   };
 
   async function submit(e: FormEvent) {
@@ -252,15 +320,21 @@ export default function ProductForm() {
     <form onSubmit={submit}>
       {msg ? <div className={`toast ${msg.t}`}>{msg.m}</div> : null}
 
+      {restored ? (
+        <div className="toast ok" style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+          <span>ڕەشنووسی پێشوو گەڕێندرایەوە</span>
+          <button type="button" className="btn btn-sm" onClick={reset}>
+            سڕینەوە
+          </button>
+        </div>
+      ) : null}
+
       <div className="box">
         <h3>وێنەی سەرەکی</h3>
         <PhotoPicker
           preview={mainPreview}
           label="وێنە بگرە"
-          onPick={(f) => {
-            setMainFile(f);
-            setMainPreview(URL.createObjectURL(f));
-          }}
+          onPick={pickMain}
         />
       </div>
 
@@ -316,7 +390,7 @@ export default function ProductForm() {
             color={c}
             canRemove={colors.length > 1}
             onChange={(patch) => patchColor(c.id, patch)}
-            onRemove={() => setColors((cs) => cs.filter((x) => x.id !== c.id))}
+            onRemove={() => removeColor(c.id)}
           />
         ))}
         <button
@@ -328,7 +402,7 @@ export default function ProductForm() {
         </button>
       </div>
 
-      <button className="btn btn-primary" disabled={busy}>
+      <button type="submit" className="btn btn-primary" disabled={busy}>
         {busy ? step || "کاردەکات..." : "پاشەکەوتکردنی کاڵا"}
       </button>
     </form>
