@@ -8,6 +8,7 @@ type Props = {
   main_image_url: string | null;
   product_variants?: { color_hex: string | null; color_name?: string | null }[];
   subcategories?: unknown;
+  subcategory_id?: unknown;
   /** Load eagerly (first row of a grid). */
   priority?: boolean;
 };

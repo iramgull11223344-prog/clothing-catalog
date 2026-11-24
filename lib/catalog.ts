@@ -13,4 +13,4 @@ export async function getNavCats(): Promise<NavCat[]> {
   return (data as NavCat[] | null) ?? [];
 }
 
-export const CARD_SELECT = "id,name,price,main_image_url,product_variants(color_hex,color_name),subcategories(category_id)";
+export const CARD_SELECT = "id,name,price,main_image_url,subcategory_id,product_variants(color_hex,color_name),subcategories(category_id)";
