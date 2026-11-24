@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import OrderModal from "@/components/OrderModal";
 import { formatPrice, formatPriceKu } from "@/lib/format";
 import { effectivePrice, toPrice } from "@/lib/variantPrice";
+import { addToCart } from "@/lib/cart";
 
 type Variant = {
   color_name: string | null;
@@ -25,6 +26,7 @@ type ColorGroup = {
 };
 
 type Props = {
+  productId: string;
   name: string;
   description: string | null;
   price: number | string;
@@ -35,7 +37,7 @@ type Props = {
   initialColor?: string;
 };
 
-export default function ProductView({ name, description, price, mainImage, variants, crumbs, initialColor }: Props) {
+export default function ProductView({ productId, name, description, price, mainImage, variants, crumbs, initialColor }: Props) {
   const colors = useMemo(() => {
     const map = new Map<string, ColorGroup>();
     for (const v of variants) {
@@ -87,6 +89,25 @@ export default function ProductView({ name, description, price, mainImage, varia
   function pickSize(s: string) {
     setPickedSize(s);
     setSizeHint(false);
+  }
+
+  const [added, setAdded] = useState(false);
+  function addCart() {
+    if (allSizes.length > 0 && !size) {
+      setSizeHint(true);
+      return;
+    }
+    addToCart({
+      productId,
+      name,
+      color: hasColors ? current?.name || current?.hex || "" : "",
+      colorHex: hasColors ? current?.hex ?? null : null,
+      size: size ?? "",
+      price: currentPrice,
+      image: image ?? null,
+    });
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1600);
   }
 
   function startOrder() {
@@ -187,6 +208,13 @@ export default function ProductView({ name, description, price, mainImage, varia
         ) : null}
 
         <div className="pv-cta">
+          <button type="button" className={`btn-cart ${added ? "is-added" : ""}`} disabled={soldOut} onClick={addCart}>
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+              <path d="M5 8h14l-1.2 12H6.2z" />
+              <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
+            </svg>
+            {soldOut ? "بەردەست نییە" : added ? "✓ زیادکرا" : "زیادکردن بۆ سەبەتە"}
+          </button>
           <button type="button" className="btn-wa order-btn" disabled={soldOut} onClick={startOrder}>
             <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
               <path
@@ -194,10 +222,10 @@ export default function ProductView({ name, description, price, mainImage, varia
                 d="M12 3C7 3 3 6.6 3 11c0 2.3 1.1 4.4 2.9 5.9L5 21l4.4-2.2c.8.2 1.7.3 2.6.3 5 0 9-3.6 9-8s-4-8-9-8zm-4 9.2a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4zm4 0a1.2 1.2 0 1 1 0-2.4 1.2 1.2 0 0 1 0 2.4z"
               />
             </svg>
-            {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردن لە ڕێگەی واتسئاپ"}
+            {soldOut ? "ئەم ڕەنگە لە ئێستادا بەردەست نییە" : "داواکردنی خێرا لە واتسئاپ"}
           </button>
         </div>
-        <p className="pv-note">داواکارییەکەت ڕاستەوخۆ دەچێتە واتسئاپی دوکان و وەڵامت دەدرێتەوە.</p>
+        <p className="pv-note">دەتوانیت چەند کاڵایەک لە بەشە جیاوازەکان بخەیتە سەبەتەوە و هەموویان پێکەوە لە واتسئاپ بنێریت.</p>
       </div>
 
       {orderOpen ? (

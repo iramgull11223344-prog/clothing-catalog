@@ -34,6 +34,7 @@ export default async function ProductPage({
       <Header active="shop" />
       <main className="container">
         <ProductView
+          productId={p.id}
           name={p.name}
           description={p.description}
           price={p.price}

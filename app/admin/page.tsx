@@ -217,7 +217,7 @@ export default function AdminPage() {
 
   return (
     <>
-      <Header back="/" />
+      <Header back="/" noCart />
       <main className="container admin">
         {userId === undefined ? (
           <div className="empty">...</div>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
+import CartButton from "@/components/CartButton";
 
 type NavKey = "home" | "shop" | "collection" | "about";
 
@@ -7,6 +8,8 @@ type Props = {
   /** Kept for compatibility with existing callers (e.g. /admin); not shown. */
   back?: string;
   active?: NavKey;
+  /** Hide the shopping bag (e.g. in /admin). */
+  noCart?: boolean;
 };
 
 const NAV: { key: NavKey; href: string; label: string }[] = [
@@ -16,7 +19,7 @@ const NAV: { key: NavKey; href: string; label: string }[] = [
   { key: "about", href: "/about", label: "دەربارە" },
 ];
 
-export default function Header({ active }: Props) {
+export default function Header({ active, noCart }: Props) {
   return (
     <header className="hdr">
       {/* Physical layout: logo left, menu centre, icons right. */}
@@ -41,6 +44,7 @@ export default function Header({ active }: Props) {
               <path d="M20 20l-4.2-4.2" strokeLinecap="round" />
             </svg>
           </Link>
+          {noCart ? null : <CartButton />}
           <Link href="/admin" className="icon-btn" aria-label="هەژمار">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="12" cy="8.5" r="3.75" />
