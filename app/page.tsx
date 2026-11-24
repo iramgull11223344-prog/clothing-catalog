@@ -1,9 +1,9 @@
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import NewArrivals from "@/components/NewArrivals";
+import FilterView from "@/components/FilterView";
 import { supabase } from "@/lib/supabase";
-import { CARD_SELECT } from "@/lib/catalog";
+import { CARD_SELECT, getNavCats } from "@/lib/catalog";
 import { COLLECTION_IMAGE, HERO_IMAGE } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ function Arrow() {
 }
 
 export default async function Home() {
-  const [catsRes, latestRes, coversRes] = await Promise.all([
+  const [catsRes, latestRes, coversRes, navCats] = await Promise.all([
     supabase
       .from("categories")
       .select("id,name,image_url")
@@ -39,6 +39,7 @@ export default async function Home() {
       .not("main_image_url", "is", null)
       .order("created_at", { ascending: false })
       .limit(60),
+    getNavCats(),
   ]);
 
   const latest: any[] = latestRes.data ?? [];
@@ -126,7 +127,7 @@ export default async function Home() {
             {latest.length === 0 ? (
               <div className="empty">کاڵا نوێیەکان بەم زووانە لێرە دادەنرێن.</div>
             ) : (
-              <NewArrivals products={latest} cats={allCats.map((c) => ({ id: c.id, name: c.name }))} />
+              <FilterView products={latest} cats={navCats} limit={8} emptyText="کاڵا نوێیەکان بەم زووانە لێرە دادەنرێن." />
             )}
           </div>
         </section>

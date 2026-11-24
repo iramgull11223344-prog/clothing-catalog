@@ -9,6 +9,8 @@ type Props = {
   active: string;
   onSelect: (id: string) => void;
   label?: string;
+  /** Smaller second row (sub-categories under a chosen category). */
+  compact?: boolean;
 };
 
 // Geometry of the glowing line (px, inside the SVG).
@@ -55,7 +57,7 @@ function bezier(x1: number, y1: number, x2: number, y2: number) {
 }
 const ease = bezier(0.22, 1, 0.36, 1);
 
-function CategoryTabs({ tabs, active, onSelect, label = "بەشەکان" }: Props) {
+function CategoryTabs({ tabs, active, onSelect, label = "بەشەکان", compact }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pathRef = useRef<SVGPathElement>(null);
   const drawn = useRef<{ width: number; half: number } | null>(null);
@@ -131,7 +133,7 @@ function CategoryTabs({ tabs, active, onSelect, label = "بەشەکان" }: Prop
   // path's width are updated, so the wave visibly travels from the old tab to the new one.
 
   return (
-    <div className="ltabs" role="group" aria-label={label}>
+    <div className={`ltabs ${compact ? "ltabs-sub" : ""}`} role="group" aria-label={label}>
       <div className="ltabs-scroll">
         <div className="ltabs-track" ref={trackRef}>
           {all.map((t) => (

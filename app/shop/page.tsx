@@ -6,8 +6,8 @@ import { CARD_SELECT, getNavCats } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
 
-export default async function ShopPage({ searchParams }: { searchParams: Promise<{ cat?: string }> }) {
-  const { cat } = await searchParams;
+export default async function ShopPage({ searchParams }: { searchParams: Promise<{ cat?: string; sub?: string }> }) {
+  const { cat, sub } = await searchParams;
   // Everything is loaded once; switching tabs is filtered in the browser.
   const [cats, res] = await Promise.all([
     getNavCats(),
@@ -18,7 +18,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     <>
       <Header active="shop" />
       <main className="container page">
-        <FilterView products={res.data ?? []} tabs={cats} by="cat" basePath="/shop" initial={cat} eyebrow="دوکان" />
+        <FilterView products={res.data ?? []} cats={cats} basePath="/shop" initialCat={cat} initialSub={sub} eyebrow="دوکان" />
       </main>
       <Footer />
     </>

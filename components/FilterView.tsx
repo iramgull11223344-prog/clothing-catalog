@@ -4,67 +4,138 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import ProductCard from "@/components/ProductCard";
 import CategoryTabs from "@/components/CategoryTabs";
 import { toKuDigits } from "@/lib/format";
-
-type Tab = { id: string; name: string };
+import { mergeTabs, type NavCat } from "@/lib/catalog";
 
 type Props = {
   /** All products for the page, loaded once on the server. */
   products: any[];
-  tabs: Tab[];
-  /** "cat" filters by category (/shop), "sub" by sub-category (/c/[id]). */
-  by: "cat" | "sub";
-  /** Path the URL is rewritten to, e.g. "/shop" or "/c/<id>". */
-  basePath: string;
-  initial?: string;
-  eyebrow: ReactNode;
-  /** Fixed title; when omitted the active tab's name is shown ("هەموو کاڵاکان" for all). */
+  /** Categories with all their sub-categories (empty ones included). */
+  cats: NavCat[];
+  /** Path the URL is rewritten to ("/shop", "/c/<id>"); omit to leave the URL alone. */
+  basePath?: string;
+  initialCat?: string;
+  initialSub?: string;
+  /** Category page: the category is fixed, only the sub-category row is shown. */
+  lockCat?: boolean;
+  /** Page heading; omit on the home page. */
+  eyebrow?: ReactNode;
+  /** Fixed title; when omitted the selected tab's name is shown. */
   title?: string;
+  /** Show at most this many products (home page). */
+  limit?: number;
+  emptyText?: string;
 };
 
-const keyOf = (p: any, by: "cat" | "sub") => (by === "cat" ? p.subcategories?.category_id : p.subcategory_id);
+const catOf = (p: any): string | undefined => p.subcategories?.category_id;
 
-// Instant tab filtering: no navigation, no Supabase request — just React state.
-export default function FilterView({ products, tabs, by, basePath, initial, eyebrow, title }: Props) {
-  const [active, setActive] = useState(initial && tabs.some((t) => t.id === initial) ? initial : "all");
+/**
+ * Instant two-level filtering (category -> sub-category) with React state only:
+ * no navigation and no Supabase request on tab clicks.
+ */
+export default function FilterView({
+  products,
+  cats,
+  basePath,
+  initialCat,
+  initialSub,
+  lockCat,
+  eyebrow,
+  title,
+  limit,
+  emptyText = "کاڵاکان بەم زووانە لێرە دادەنرێن.",
+}: Props) {
+  const catTabs = useMemo(() => mergeTabs(cats), [cats]);
+  // With a single category (or on a category page) its sub-categories are the useful tabs.
+  const showCatRow = !lockCat && catTabs.length > 1;
 
-  const list = useMemo(
-    () => (active === "all" ? products : products.filter((p) => keyOf(p, by) === active)),
-    [active, products, by]
-  );
+  const findTab = <T extends { ids: string[]; id: string }>(tabs: T[], id?: string) =>
+    id ? tabs.find((t) => t.id === id || t.ids.includes(id)) : undefined;
 
-  const select = useCallback(
-    (id: string) => {
-      setActive(id);
-      // Keep the URL shareable without a server round-trip or scroll jump.
-      const param = by === "cat" ? "cat" : "sub";
-      window.history.replaceState(window.history.state, "", id === "all" ? basePath : `${basePath}?${param}=${id}`);
+  const [cat, setCat] = useState(() => (showCatRow ? findTab(catTabs, initialCat)?.id : undefined) ?? "all");
+  const selCat = showCatRow ? catTabs.find((t) => t.id === cat) : undefined;
+
+  // Sub-categories offered for the current category choice (all subs when there is no category row).
+  const subTabs = useMemo(() => {
+    const pool = showCatRow ? (selCat ? cats.filter((c) => selCat.ids.includes(c.id)) : []) : cats;
+    return mergeTabs(pool.flatMap((c) => c.subs));
+  }, [cats, showCatRow, selCat]);
+
+  const [sub, setSub] = useState(() => findTab(subTabs, initialSub)?.id ?? "all");
+  const selSub = subTabs.find((t) => t.id === sub);
+
+  const syncUrl = useCallback(
+    (c: string, s: string) => {
+      if (!basePath) return;
+      const q = new URLSearchParams();
+      if (c !== "all") q.set("cat", c);
+      if (s !== "all") q.set("sub", s);
+      const qs = q.toString();
+      // Shareable URL without a server round-trip or scroll jump.
+      window.history.replaceState(window.history.state, "", qs ? `${basePath}?${qs}` : basePath);
     },
-    [basePath, by]
+    [basePath]
   );
 
-  const activeName = tabs.find((t) => t.id === active)?.name;
+  const pickCat = useCallback(
+    (id: string) => {
+      setCat(id);
+      setSub("all");
+      syncUrl(id, "all");
+    },
+    [syncUrl]
+  );
+
+  const pickSub = useCallback(
+    (id: string) => {
+      setSub(id);
+      syncUrl(cat, id);
+    },
+    [syncUrl, cat]
+  );
+
+  const list = useMemo(() => {
+    let out = products;
+    if (selCat) out = out.filter((p) => selCat.ids.includes(catOf(p) ?? ""));
+    if (selSub) out = out.filter((p) => selSub.ids.includes(p.subcategory_id));
+    return limit ? out.slice(0, limit) : out;
+  }, [products, selCat, selSub, limit]);
+
+  const filtered = !!(selCat || selSub);
+  const heading = title ?? selSub?.name ?? selCat?.name ?? "هەموو کاڵاکان";
 
   return (
     <>
-      <div className="page-head">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title ?? activeName ?? "هەموو کاڵاکان"}</h1>
-        <span className="count">{toKuDigits(list.length)} کاڵا</span>
-      </div>
+      {eyebrow !== undefined ? (
+        <div className="page-head">
+          <p className="eyebrow">{eyebrow}</p>
+          <h1>{heading}</h1>
+          <span className="count">{toKuDigits(list.length)} کاڵا</span>
+        </div>
+      ) : null}
 
-      {tabs.length > 0 ? <CategoryTabs tabs={tabs} active={active} onSelect={select} /> : null}
+      {showCatRow ? <CategoryTabs tabs={catTabs} active={cat} onSelect={pickCat} label="بەشەکان" /> : null}
+      {subTabs.length > 0 ? (
+        <CategoryTabs
+          key={showCatRow ? `subs-${cat}` : "subs"}
+          tabs={subTabs}
+          active={sub}
+          onSelect={pickSub}
+          label="بەشە لاوەکییەکان"
+          compact={showCatRow}
+        />
+      ) : null}
 
       {list.length === 0 ? (
         <div className="empty">
-          {active === "all" ? (
-            "کاڵاکان بەم زووانە لێرە دادەنرێن."
-          ) : (
+          {filtered ? (
             <>
               هێشتا کاڵا لەم بەشەدا نییە.{" "}
-              <button type="button" className="link link-btn" onClick={() => select("all")}>
+              <button type="button" className="link link-btn" onClick={() => pickCat("all")}>
                 هەموو کاڵاکان ببینە
               </button>
             </>
+          ) : (
+            emptyText
           )}
         </div>
       ) : (
@@ -74,7 +145,6 @@ export default function FilterView({ products, tabs, by, basePath, initial, eyeb
           ))}
         </div>
       )}
-
     </>
   );
 }

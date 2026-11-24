@@ -209,6 +209,8 @@ a, button, input, select, textarea, label, [role="button"] { touch-action: manip
 :root[data-theme="dark"] { --wave: #7ef9e5; --wave-glow: rgba(126, 249, 229, 0.75); --wave-dot: #e9fffb; --glass: rgba(24, 24, 24, 0.6); --glass-line: rgba(255, 255, 255, 0.08); --glass-shadow: 0 12px 34px -16px rgba(0, 0, 0, 0.9); }
 
 .ltabs { margin-bottom: 36px; }
+.ltabs + .ltabs { margin-top: -22px; }
+.ltabs-sub .ltab { font-size: 14px; }
 .ltabs-scroll {
   overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
   border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); box-shadow: var(--glass-shadow);

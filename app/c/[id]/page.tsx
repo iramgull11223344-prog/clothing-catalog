@@ -49,10 +49,10 @@ export default async function CategoryPage({
       <main className="container page">
         <FilterView
           products={products}
-          tabs={subs.map((s: any) => ({ id: s.id, name: s.name }))}
-          by="sub"
+          cats={[{ id: cat.id, name: cat.name, subs: subs.map((s: any) => ({ id: s.id, name: s.name })) }]}
+          lockCat
           basePath={`/c/${cat.id}`}
-          initial={sub}
+          initialSub={sub}
           title={cat.name}
           eyebrow={<Link href="/shop">دوکان</Link>}
         />
