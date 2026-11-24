@@ -1,111 +1,159 @@
 import Link from "next/link";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import { supabase } from "@/lib/supabase";
 import { CARD_SELECT } from "@/lib/catalog";
-import { WHATSAPP_NUMBER } from "@/lib/config";
+import { COLLECTION_IMAGE, HERO_IMAGE } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
+// Points left: "forward" in a right-to-left page.
+function Arrow() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5M11 6l-6 6 6 6" />
+    </svg>
+  );
+}
+
 export default async function Home() {
-  const [catsRes, latestRes] = await Promise.all([
+  const [catsRes, latestRes, coversRes] = await Promise.all([
     supabase
       .from("categories")
-      .select("id,name,image_url,sort_order,subcategories(id,name,sort_order)")
+      .select("id,name,image_url")
       .eq("is_active", true)
       .order("sort_order")
-      .order("created_at"),
+      .order("created_at")
+      .limit(4),
     supabase
       .from("products")
       .select(CARD_SELECT)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
-      .limit(12),
+      .limit(8),
+    // Fallback cover per category: its newest product photo.
+    supabase
+      .from("products")
+      .select("main_image_url,subcategories(category_id)")
+      .eq("is_active", true)
+      .not("main_image_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(60),
   ]);
 
-  const cats = catsRes.data ?? [];
-  const latest = latestRes.data ?? [];
-  // Lookbook hero: the newest products that have a photo.
-  const looks = latest.filter((p: any) => p.main_image_url).slice(0, 3);
+  const latest: any[] = latestRes.data ?? [];
+  const covers = new Map<string, string>();
+  for (const p of (coversRes.data ?? []) as any[]) {
+    const cid = p.subcategories?.category_id;
+    if (cid && p.main_image_url && !covers.has(cid)) covers.set(cid, p.main_image_url);
+  }
+  const cats = ((catsRes.data ?? []) as any[]).map((c) => ({ ...c, cover: c.image_url || covers.get(c.id) || null }));
+
+  const photos = latest.map((p) => p.main_image_url).filter(Boolean) as string[];
+  const heroImg = HERO_IMAGE || photos[0] || cats.find((c) => c.cover)?.cover || null;
+  const collectionImg = COLLECTION_IMAGE || photos.find((src) => src !== heroImg) || heroImg;
 
   return (
     <>
-      <Header cats={cats.map((c: any) => ({ id: c.id, name: c.name }))} active="all" />
+      <Header active="home" />
       <main>
-        <section className={`hero container ${looks.length ? "" : "hero-text"}`}>
-          <div className="hero-copy">
-            <h1>کۆلێکشنی نوێ</h1>
-            <p>
-              بە ڕەنگ و قەبارەی جیاواز. ڕەنگ و قەبارەکەت هەڵبژێرە و ڕاستەوخۆ لە ڕێگەی واتسئاپ داوای بکە.
-            </p>
-            {latest.length > 0 ? (
-              <a href="#new" className="btn-ink">
-                بینینی نوێترینەکان
-              </a>
-            ) : null}
-          </div>
-
-          {looks.length > 0 ? (
-            <div className={`looks looks-${looks.length}`}>
-              {looks.map((p: any, i: number) => (
-                <Link key={p.id} href={`/p/${p.id}`} className="look" aria-label={p.name}>
-                  <img src={p.main_image_url} alt="" loading={i === 0 ? "eager" : "lazy"} />
-                </Link>
-              ))}
+        {/* Hero */}
+        <section className="hero">
+          <div className="container">
+            <div className={`hero-panel ${heroImg ? "" : "no-img"}`} dir="ltr">
+              <div className="hero-copy" dir="rtl">
+                <p className="eyebrow">مۆدێرنی پێویست</p>
+                <h1>کۆمەڵەی جلوبەرگی شەقامی بێوەخت</h1>
+                <p className="hero-lead">ئەو جلە بنەڕەتییانەی لەگەڵ شێوازی مۆدێرن، بۆ ژیانی ڕۆژانە.</p>
+                <div className="hero-btns">
+                  <Link href="/shop" className="btn-solid">
+                    کڕینی کۆمەڵەکە
+                  </Link>
+                  <a href="#new" className="btn-line">
+                    گەڕان بەدوای دیمەنەکان
+                  </a>
+                </div>
+              </div>
+              {heroImg ? (
+                <div className="hero-media">
+                  <img src={heroImg} alt="" />
+                </div>
+              ) : null}
             </div>
-          ) : null}
+          </div>
         </section>
 
+        {/* Categories */}
         {cats.length > 0 ? (
-          <section className="container section">
-            <div className="section-head">
-              <h2>بەشەکان</h2>
-            </div>
-            <div className="cat-grid">
-              {cats.map((c: any) => {
-                const subs = (c.subcategories ?? [])
-                  .slice()
-                  .sort((a: any, b: any) => a.sort_order - b.sort_order)
-                  .slice(0, 3)
-                  .map((s: any) => s.name);
-                return (
-                  <Link key={c.id} href={`/c/${c.id}`} className="cat-tile">
-                    {c.image_url ? <img src={c.image_url} alt="" loading="lazy" /> : null}
-                    <div className="cat-tile-txt">
-                      <h3>{c.name}</h3>
-                      {subs.length ? <small>{subs.join("، ")}</small> : null}
+          <section className="sec">
+            <div className="container">
+              <div className="sec-head">
+                <h2 className="sec-title-sm">بەشەکان</h2>
+                <Link href="/shop" className="more">
+                  هەموو کاڵاکان
+                </Link>
+              </div>
+              <div className="cat-row">
+                {cats.map((c) => (
+                  <Link key={c.id} href={`/c/${c.id}`} className="cat">
+                    <div className="cat-img">{c.cover ? <img src={c.cover} alt="" loading="lazy" /> : null}</div>
+                    <div className="cat-name">
+                      <span>{c.name}</span>
+                      <Arrow />
                     </div>
                   </Link>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </section>
         ) : null}
 
-        <section className="container section" id="new">
-          <div className="section-head">
-            <h2>نوێترین کاڵاکان</h2>
-            {latest.length > 0 ? <span>{latest.length} کاڵا</span> : null}
-          </div>
-          {latest.length === 0 ? (
-            <div className="empty">کاڵاکان بەم زووانە لێرە دادەنرێن.</div>
-          ) : (
-            <div className="grid">
-              {latest.map((p: any, i: number) => (
-                <ProductCard key={p.id} {...p} priority={i < 2} />
-              ))}
+        {/* New arrivals */}
+        <section className="sec" id="new">
+          <div className="container">
+            <div className="sec-head">
+              <div>
+                <p className="eyebrow">نوێترینەکان</p>
+                <h2 className="sec-title">ستایلی نوێ، تازە لێرە</h2>
+              </div>
+              {latest.length > 0 ? (
+                <Link href="/shop" className="more">
+                  بینینی هەموو
+                </Link>
+              ) : null}
             </div>
-          )}
+            {latest.length === 0 ? (
+              <div className="empty">کاڵا نوێیەکان بەم زووانە لێرە دادەنرێن.</div>
+            ) : (
+              <div className="grid">
+                {latest.map((p, i) => (
+                  <ProductCard key={p.id} {...p} priority={i < 2} />
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Our collection */}
+        <section className="sec" id="collection">
+          <div className="container">
+            <div className={`coll ${collectionImg ? "" : "no-img"}`}>
+              {collectionImg ? <img src={collectionImg} alt="" loading="lazy" /> : null}
+              <div className="coll-copy" dir="ltr">
+                <div dir="rtl">
+                  <h2>کۆمەڵەی ئێمە</h2>
+                  <p>بۆ جووڵانەوەی ڕۆژانەی هەموو ڕۆژێک</p>
+                  <Link href="/shop" className="btn-light">
+                    کۆمەڵەی تاقیکردنەوە
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
-      <footer className="footer">
-        <div className="container footer-in">
-          <span className="logo logo-sm" dir="ltr">ERAM STORE</span>
-          <a href={`https://wa.me/${WHATSAPP_NUMBER}`} className="link" target="_blank" rel="noopener noreferrer">
-            پەیوەندی لە ڕێگەی واتسئاپ
-          </a>
-        </div>
-      </footer>
+      <Footer />
     </>
   );
 }

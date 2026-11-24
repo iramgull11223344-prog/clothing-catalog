@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import { supabase } from "@/lib/supabase";
-import { CARD_SELECT, getNavCats } from "@/lib/catalog";
+import { CARD_SELECT } from "@/lib/catalog";
+import { toKuDigits } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +19,11 @@ export default async function CategoryPage({
   const { id } = await params;
   const { sub } = await searchParams;
 
-  const [{ data: cat }, navCats] = await Promise.all([
-    supabase.from("categories").select("id,name,subcategories(id,name,sort_order)").eq("id", id).maybeSingle(),
-    getNavCats(),
-  ]);
+  const { data: cat } = await supabase
+    .from("categories")
+    .select("id,name,subcategories(id,name,sort_order)")
+    .eq("id", id)
+    .maybeSingle();
   if (!cat) notFound();
 
   const subs = [...(cat.subcategories ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
@@ -41,24 +44,23 @@ export default async function CategoryPage({
 
   return (
     <>
-      <Header back="/" cats={navCats} active={cat.id} />
-      <main className="container">
+      <Header active="shop" />
+      <main className="container page">
         <div className="page-head">
+          <p className="eyebrow">
+            <Link href="/shop">دوکان</Link>
+          </p>
           <h1>{cat.name}</h1>
-          <span>{products.length} کاڵا</span>
+          <span className="count">{toKuDigits(products.length)} کاڵا</span>
         </div>
 
         {subs.length > 0 ? (
-          <nav className="subtabs" aria-label="بەشە لاوەکییەکان">
-            <Link href={`/c/${cat.id}`} className={`subtab ${!activeSub ? "on" : ""}`}>
+          <nav className="tabs-line" aria-label="بەشە لاوەکییەکان">
+            <Link href={`/c/${cat.id}`} className={!activeSub ? "on" : ""}>
               هەموو
             </Link>
             {subs.map((s: any) => (
-              <Link
-                key={s.id}
-                href={`/c/${cat.id}?sub=${s.id}`}
-                className={`subtab ${activeSub === s.id ? "on" : ""}`}
-              >
+              <Link key={s.id} href={`/c/${cat.id}?sub=${s.id}`} className={activeSub === s.id ? "on" : ""}>
                 {s.name}
               </Link>
             ))}
@@ -68,18 +70,19 @@ export default async function CategoryPage({
         {products.length === 0 ? (
           <div className="empty">
             هێشتا کاڵا لەم بەشەدا نییە.{" "}
-            <Link href="/" className="link">
-              گەڕانەوە بۆ سەرەتا
+            <Link href="/shop" className="link">
+              هەموو کاڵاکان ببینە
             </Link>
           </div>
         ) : (
-          <div className="grid page-grid">
+          <div className="grid">
             {products.map((p, i) => (
               <ProductCard key={p.id} {...p} priority={i < 2} />
             ))}
           </div>
         )}
       </main>
+      <Footer />
     </>
   );
 }

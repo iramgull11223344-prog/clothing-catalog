@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import OrderModal from "@/components/OrderModal";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, formatPriceKu } from "@/lib/format";
 
 type Variant = {
   color_name: string | null;
@@ -122,7 +122,7 @@ export default function ProductView({ name, description, price, mainImage, varia
       <div className="pv-info">
         {crumbs ? <div className="crumbs">{crumbs}</div> : null}
         <h1>{name}</h1>
-        <div className="pv-price">{formatPrice(price)}</div>
+        <div className="pv-price">{formatPriceKu(price)}</div>
         {description ? <p className="desc">{description}</p> : null}
 
         {hasColors ? (

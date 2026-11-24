@@ -3,6 +3,18 @@ export function formatPrice(n: number | string | null | undefined): string {
   return `${v.toLocaleString("en-US", { maximumFractionDigits: 0 })} د.ع`;
 }
 
+const KU_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+
+/** Western digits -> Kurdish/Arabic-Indic digits (display only). */
+export function toKuDigits(s: string | number): string {
+  return String(s).replace(/[0-9]/g, (d) => KU_DIGITS[Number(d)]);
+}
+
+/** Price for display on the storefront, e.g. "٤٥,٠٠٠ د.ع". WhatsApp messages keep formatPrice. */
+export function formatPriceKu(n: number | string | null | undefined): string {
+  return toKuDigits(formatPrice(n));
+}
+
 export function makeSlug(name: string): string {
   const base = name
     .trim()
