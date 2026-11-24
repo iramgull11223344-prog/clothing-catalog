@@ -56,11 +56,11 @@ export default async function CategoryPage({
 
         {subs.length > 0 ? (
           <nav className="tabs-line" aria-label="بەشە لاوەکییەکان">
-            <Link href={`/c/${cat.id}`} className={!activeSub ? "on" : ""}>
+            <Link href={`/c/${cat.id}`} scroll={false} className={!activeSub ? "on" : ""}>
               هەموو
             </Link>
             {subs.map((s: any) => (
-              <Link key={s.id} href={`/c/${cat.id}?sub=${s.id}`} className={activeSub === s.id ? "on" : ""}>
+              <Link key={s.id} href={`/c/${cat.id}?sub=${s.id}`} scroll={false} className={activeSub === s.id ? "on" : ""}>
                 {s.name}
               </Link>
             ))}

@@ -7,6 +7,7 @@ type Props = {
   price: number | string;
   main_image_url: string | null;
   product_variants?: { color_hex: string | null; color_name?: string | null }[];
+  subcategories?: unknown;
   /** Load eagerly (first row of a grid). */
   priority?: boolean;
 };

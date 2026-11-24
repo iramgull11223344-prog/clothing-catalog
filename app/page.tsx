@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import ProductCard from "@/components/ProductCard";
+import NewArrivals from "@/components/NewArrivals";
 import { supabase } from "@/lib/supabase";
 import { CARD_SELECT } from "@/lib/catalog";
 import { COLLECTION_IMAGE, HERO_IMAGE } from "@/lib/config";
@@ -24,14 +24,13 @@ export default async function Home() {
       .select("id,name,image_url")
       .eq("is_active", true)
       .order("sort_order")
-      .order("created_at")
-      .limit(4),
+      .order("created_at"),
     supabase
       .from("products")
       .select(CARD_SELECT)
       .eq("is_active", true)
       .order("created_at", { ascending: false })
-      .limit(8),
+      .limit(48),
     // Fallback cover per category: its newest product photo.
     supabase
       .from("products")
@@ -48,7 +47,8 @@ export default async function Home() {
     const cid = p.subcategories?.category_id;
     if (cid && p.main_image_url && !covers.has(cid)) covers.set(cid, p.main_image_url);
   }
-  const cats = ((catsRes.data ?? []) as any[]).map((c) => ({ ...c, cover: c.image_url || covers.get(c.id) || null }));
+  const allCats = ((catsRes.data ?? []) as any[]).map((c) => ({ ...c, cover: c.image_url || covers.get(c.id) || null }));
+  const cats = allCats.slice(0, 4);
 
   const photos = latest.map((p) => p.main_image_url).filter(Boolean) as string[];
   const heroImg = HERO_IMAGE || photos[0] || cats.find((c) => c.cover)?.cover || null;
@@ -126,11 +126,7 @@ export default async function Home() {
             {latest.length === 0 ? (
               <div className="empty">کاڵا نوێیەکان بەم زووانە لێرە دادەنرێن.</div>
             ) : (
-              <div className="grid">
-                {latest.map((p, i) => (
-                  <ProductCard key={p.id} {...p} priority={i < 2} />
-                ))}
-              </div>
+              <NewArrivals products={latest} cats={allCats.map((c) => ({ id: c.id, name: c.name }))} />
             )}
           </div>
         </section>

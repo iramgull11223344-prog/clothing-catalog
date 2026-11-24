@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type NavKey = "home" | "shop" | "collection" | "about";
 
@@ -33,6 +34,7 @@ export default function Header({ active }: Props) {
         </nav>
 
         <div className="hdr-icons">
+          <ThemeToggle />
           <Link href="/search" className="icon-btn" aria-label="گەڕان">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5">
               <circle cx="11" cy="11" r="6.5" />
