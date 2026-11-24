@@ -72,39 +72,89 @@ export async function getFile(key: string): Promise<File | null> {
   return blob instanceof File ? blob : new File([blob], "photo.jpg", { type: blob.type || "image/jpeg" });
 }
 
+/** Clears the new-product draft (text + its photos). Other admin drafts are kept. */
 export async function clearDraft() {
   try {
     localStorage.removeItem(KEY);
   } catch {
     /* ignore */
   }
-  await run("readwrite", (s) => s.clear());
+  const keys = ((await run("readonly", (s) => s.getAllKeys())) ?? []) as IDBValidKey[];
+  for (const k of keys) {
+    const key = String(k);
+    if (key === "main" || key.startsWith("color:")) await putFile(key, null);
+  }
 }
 
-// ---- Scroll position (sessionStorage: per tab, survives the camera-triggered reload).
-const SCROLL_KEY = "new-product-scroll-v1";
+// ---- Scroll position per admin tab (sessionStorage: per browser tab, survives reloads,
+// e.g. the camera-triggered reload on phones).
+const SCROLL_KEY = "admin-scroll-v2";
+export const ADMIN_TAB_KEY = "admin-tab-v1";
 
-export function saveScroll(y: number = window.scrollY) {
+function scrollMap(): Record<string, number> {
   try {
-    sessionStorage.setItem(SCROLL_KEY, String(Math.round(y)));
+    return JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function currentTab(): string {
+  try {
+    return sessionStorage.getItem(ADMIN_TAB_KEY) || "new";
+  } catch {
+    return "new";
+  }
+}
+
+export function saveScroll(y: number = window.scrollY, tab: string = currentTab()) {
+  try {
+    const m = scrollMap();
+    m[tab] = Math.round(y);
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(m));
   } catch {
     /* ignore */
   }
 }
 
-export function loadScroll(): number | null {
+export function loadScroll(tab: string = currentTab()): number | null {
+  const n = scrollMap()[tab];
+  return typeof n === "number" && n > 0 ? n : null;
+}
+
+export function clearScroll(tab: string = currentTab()) {
   try {
-    const v = sessionStorage.getItem(SCROLL_KEY);
-    const n = v == null ? NaN : Number(v);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    const m = scrollMap();
+    delete m[tab];
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(m));
   } catch {
-    return null;
+    /* ignore */
   }
 }
 
-export function clearScroll() {
+// ---- Small text drafts for the other admin forms (localStorage).
+const DRAFT_PREFIX = "admin-draft:";
+
+export function readDraft<T>(key: string, fallback: T): T {
   try {
-    sessionStorage.removeItem(SCROLL_KEY);
+    const raw = localStorage.getItem(DRAFT_PREFIX + key);
+    return raw == null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeDraft(key: string, value: unknown) {
+  try {
+    localStorage.setItem(DRAFT_PREFIX + key, JSON.stringify(value));
+  } catch {
+    /* storage full or blocked */
+  }
+}
+
+export function removeDraft(key: string) {
+  try {
+    localStorage.removeItem(DRAFT_PREFIX + key);
   } catch {
     /* ignore */
   }

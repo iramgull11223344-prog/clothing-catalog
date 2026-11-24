@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import type { Session } from "@supabase/supabase-js";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
 import Header from "@/components/Header";
 import ProductForm from "@/components/admin/ProductForm";
 import ProductList from "@/components/admin/ProductList";
 import CatalogManager from "@/components/admin/CatalogManager";
 import QrTab from "@/components/admin/QrTab";
 import { supabase } from "@/lib/supabase";
+import { ADMIN_TAB_KEY, loadScroll, saveScroll } from "@/lib/draft";
 
 type Tab = "new" | "products" | "catalog" | "qr";
 
@@ -59,65 +59,214 @@ function Login() {
   );
 }
 
+// Admin status is cached per user for this browser tab, so a session refresh or a reload
+// never swaps the panel for a loading screen (which used to wipe every form).
+const adminCacheKey = (uid: string) => `admin-ok:${uid}`;
+function readAdminCache(uid: string): boolean | null {
+  try {
+    const v = sessionStorage.getItem(adminCacheKey(uid));
+    return v === "1" ? true : v === "0" ? false : null;
+  } catch {
+    return null;
+  }
+}
+function writeAdminCache(uid: string, ok: boolean) {
+  try {
+    sessionStorage.setItem(adminCacheKey(uid), ok ? "1" : "0");
+  } catch {}
+}
+
+function readTab(): Tab {
+  try {
+    const t = sessionStorage.getItem(ADMIN_TAB_KEY);
+    if (t && TABS.some((x) => x.id === t)) return t as Tab;
+  } catch {}
+  return "new";
+}
+
 export default function AdminPage() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined);
+  // Only the user id matters. Supabase emits a new session object on every token refresh
+  // (e.g. when the page regains focus after the camera); reacting to that object used to
+  // unmount the whole panel. A string id that did not change does not re-render anything.
+  const [userId, setUserId] = useState<string | null | undefined>(undefined);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [checkFailed, setCheckFailed] = useState(false);
   const [tab, setTab] = useState<Tab>("new");
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>());
+  const tabRef = useRef<Tab>("new");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user.id ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUserId(s?.user.id ?? null));
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    setIsAdmin(null);
-    if (!session) return;
+  const checkAdmin = useCallback((uid: string) => {
+    setCheckFailed(false);
     supabase
       .from("admins")
       .select("user_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", uid)
       .maybeSingle()
-      .then(({ data }) => setIsAdmin(!!data));
-  }, [session]);
+      .then(({ data, error }) => {
+        if (error) {
+          // Keep a cached answer on a network hiccup; otherwise offer a retry.
+          if (readAdminCache(uid) === null) setCheckFailed(true);
+          return;
+        }
+        writeAdminCache(uid, !!data);
+        setIsAdmin(!!data);
+      });
+  }, []);
 
-  const logout = () => supabase.auth.signOut();
+  useEffect(() => {
+    if (!userId) {
+      setIsAdmin(null);
+      return;
+    }
+    const cached = readAdminCache(userId);
+    setIsAdmin(cached);
+    checkAdmin(userId);
+  }, [userId, checkAdmin]);
+
+  // Restore the last admin tab (sessionStorage) once.
+  useEffect(() => {
+    const t = readTab();
+    tabRef.current = t;
+    setTab(t);
+    setVisited(new Set<Tab>([t]));
+  }, []);
+
+  const ready = !!userId && isAdmin === true;
+
+  // ---- scroll: one position per tab, restored after reloads and tab switches
+  const restoring = useRef(false);
+  useEffect(() => {
+    if (!ready) return;
+    const prev = history.scrollRestoration;
+    history.scrollRestoration = "manual";
+    let raf = 0;
+    const onScroll = () => {
+      if (restoring.current) return;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => saveScroll(window.scrollY, tabRef.current));
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll);
+      history.scrollRestoration = prev;
+    };
+  }, [ready]);
+
+  useLayoutEffect(() => {
+    if (!ready) return;
+    const target = loadScroll(tab) ?? 0;
+    restoring.current = true;
+    let raf = 0;
+    const started = performance.now();
+    const stop = () => {
+      cancelAnimationFrame(raf);
+      restoring.current = false;
+    };
+    // Content may still be growing (draft photos, lists from Supabase): retry for up to 2s.
+    const tick = () => {
+      window.scrollTo(0, target);
+      if (Math.abs(window.scrollY - target) <= 2 || performance.now() - started > 2000) return stop();
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    window.addEventListener("touchstart", stop, { passive: true, once: true });
+    window.addEventListener("wheel", stop, { passive: true, once: true });
+    return () => {
+      stop();
+      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("wheel", stop);
+    };
+  }, [tab, ready]);
+
+  function switchTab(t: Tab) {
+    if (t === tab) return;
+    saveScroll(window.scrollY, tab);
+    tabRef.current = t;
+    try {
+      sessionStorage.setItem(ADMIN_TAB_KEY, t);
+    } catch {}
+    setVisited((v) => (v.has(t) ? v : new Set(v).add(t)));
+    setTab(t);
+  }
+
+  const logout = () => {
+    if (userId) {
+      try {
+        sessionStorage.removeItem(adminCacheKey(userId));
+      } catch {}
+    }
+    supabase.auth.signOut();
+  };
+
+  const PANELS: Record<Tab, () => ReactNode> = {
+    new: () => <ProductForm />,
+    products: () => <ProductList />,
+    catalog: () => <CatalogManager />,
+    qr: () => <QrTab />,
+  };
 
   return (
     <>
       <Header back="/" />
       <main className="container admin">
-        {session === undefined ? (
+        {userId === undefined ? (
           <div className="empty">...</div>
-        ) : !session ? (
+        ) : !userId ? (
           <Login />
         ) : isAdmin === null ? (
-          <div className="empty">...</div>
+          checkFailed ? (
+            <div className="empty">
+              پەیوەندی بە سێرڤەرەوە نەکرا.{" "}
+              <button type="button" className="link link-btn" onClick={() => checkAdmin(userId)}>
+                دووبارە هەوڵبدەرەوە
+              </button>
+            </div>
+          ) : (
+            <div className="empty">...</div>
+          )
         ) : !isAdmin ? (
           <div className="login box">
             <h1>ئەم ئەکاونتە ئەدمین نییە</h1>
             <p style={{ color: "var(--muted)", marginBottom: 12 }}>ئەم ID ـە بخە ناو خشتەی admins:</p>
-            <div className="mono">{session.user.id}</div>
+            <div className="mono">{userId}</div>
             <button className="btn" style={{ marginTop: 14 }} onClick={logout}>
               چوونەدەرەوە
             </button>
           </div>
         ) : (
           <>
-            <div className="tabs">
+            <div className="tabs" role="tablist">
               {TABS.map((t) => (
-                <button key={t.id} className={`tab ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === t.id}
+                  className={`tab ${tab === t.id ? "active" : ""}`}
+                  onClick={() => switchTab(t.id)}
+                >
                   {t.label}
                 </button>
               ))}
-              <button className="tab" onClick={logout}>
+              <button type="button" className="tab" onClick={logout}>
                 چوونەدەرەوە
               </button>
             </div>
-            {tab === "new" ? <ProductForm /> : null}
-            {tab === "products" ? <ProductList /> : null}
-            {tab === "catalog" ? <CatalogManager /> : null}
-            {tab === "qr" ? <QrTab /> : null}
+            {/* Visited tabs stay mounted (just hidden), so switching tabs never loses typing. */}
+            {TABS.map((t) =>
+              visited.has(t.id) ? (
+                <div key={t.id} role="tabpanel" hidden={tab !== t.id}>
+                  {PANELS[t.id]()}
+                </div>
+              ) : null
+            )}
           </>
         )}
       </main>

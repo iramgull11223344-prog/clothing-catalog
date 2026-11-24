@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
 import { uploadImage, uid } from "@/lib/image";
-import { loadDraft, saveDraft, clearDraft, putFile, getFile, saveScroll, loadScroll, clearScroll } from "@/lib/draft";
+import { loadDraft, saveDraft, clearDraft, putFile, getFile, clearScroll } from "@/lib/draft";
 import PhotoPicker from "./PhotoPicker";
 
 type Cat = { id: string; name: string; subcategories: { id: string; name: string }[] };
@@ -167,6 +167,10 @@ export default function ProductForm() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState("");
   const [msg, setMsg] = useState<{ t: "ok" | "err"; m: string } | null>(null);
+  // Validation errors shown next to their field; the form is never emptied on an error.
+  const [errs, setErrs] = useState<Partial<Record<"name" | "sub" | "price" | "photo", string>>>({});
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const clearErr = (k: keyof typeof errs) => setErrs((e) => (e[k] ? { ...e, [k]: undefined } : e));
   const [loaded, setLoaded] = useState(false);
   const [restored, setRestored] = useState(false);
 
@@ -220,57 +224,6 @@ export default function ProductForm() {
     });
   }, [loaded, catId, subId, name, desc, price, colors]);
 
-  // Once the draft is back, return to the saved scroll position, then keep it up to date.
-  useEffect(() => {
-    if (!loaded) return;
-    const prevRestoration = history.scrollRestoration;
-    history.scrollRestoration = "manual";
-
-    const target = loadScroll();
-    let raf = 0;
-    let restoreRaf = 0;
-    let tracking = false;
-    const onScroll = () => {
-      if (!tracking) return;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => saveScroll());
-    };
-    // Stop restoring as soon as the user scrolls by hand.
-    const stopRestore = () => {
-      cancelAnimationFrame(restoreRaf);
-      tracking = true;
-    };
-
-    if (target != null) {
-      // The page can still be growing (photos, categories), so retry until we reach it (max ~1.5s).
-      const started = performance.now();
-      const tick = () => {
-        window.scrollTo(0, target);
-        if (Math.abs(window.scrollY - target) <= 2 || performance.now() - started > 1500) {
-          tracking = true;
-          saveScroll();
-          return;
-        }
-        restoreRaf = requestAnimationFrame(tick);
-      };
-      restoreRaf = requestAnimationFrame(tick);
-      window.addEventListener("touchstart", stopRestore, { passive: true, once: true });
-      window.addEventListener("wheel", stopRestore, { passive: true, once: true });
-    } else {
-      tracking = true;
-    }
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(restoreRaf);
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("touchstart", stopRestore);
-      window.removeEventListener("wheel", stopRestore);
-      history.scrollRestoration = prevRestoration;
-    };
-  }, [loaded]);
-
   useEffect(() => {
     supabase
       .from("categories")
@@ -293,12 +246,20 @@ export default function ProductForm() {
   };
 
   const pickMain = (f: File) => {
+    clearErr("photo");
     putFile("main", f);
     setMainFile(f);
     setMainPreview(URL.createObjectURL(f));
   };
 
-  const reset = () => {
+  /** Empties the form. After a successful save the chosen category is kept for the next product. */
+  const reset = (keepCategory = false) => {
+    if (!keepCategory) {
+      setCatId("");
+      setSubId("");
+    }
+    setErrs({});
+    setSubmitErr(null);
     setName("");
     setDesc("");
     setPrice("");
@@ -313,14 +274,28 @@ export default function ProductForm() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setMsg(null);
+    setSubmitErr(null);
 
     const priceNum = Number(price);
     const used = colors.filter((c) => c.name.trim() || c.file || c.sizes.length);
 
-    if (!name.trim()) return setMsg({ t: "err", m: "ناوی کاڵا بنووسە" });
-    if (!subId) return setMsg({ t: "err", m: "بەشی لاوەکی هەڵبژێرە" });
-    if (price === "" || Number.isNaN(priceNum) || priceNum < 0) return setMsg({ t: "err", m: "نرخ دروست نییە" });
-    if (!mainFile && !used.some((c) => c.file)) return setMsg({ t: "err", m: "لانی کەم یەک وێنە زیاد بکە" });
+    const found: typeof errs = {};
+    if (!name.trim()) found.name = "ناوی کاڵا بنووسە";
+    if (!subId) found.sub = catId ? "بەشی لاوەکی هەڵبژێرە" : "بەشی سەرەکی و لاوەکی هەڵبژێرە";
+    if (price === "" || Number.isNaN(priceNum) || priceNum < 0) found.price = "نرخ دروست نییە (تەنها ژمارە)";
+    if (!mainFile && !used.some((c) => c.file)) found.photo = "لانی کەم یەک وێنە زیاد بکە";
+    setErrs(found);
+    const first = (["photo", "name", "sub", "price"] as const).find((k) => found[k]);
+    if (first) {
+      // Bring only the first wrong field into view (no jump to the top), and focus it.
+      const el = document.getElementById(`pf-${first}`);
+      if (el) {
+        const r = el.getBoundingClientRect();
+        if (r.top < 80 || r.bottom > window.innerHeight) el.scrollIntoView({ block: "center", behavior: "smooth" });
+        el.querySelector<HTMLElement>("input,select,textarea,button")?.focus({ preventScroll: true });
+      }
+      return;
+    }
 
     setBusy(true);
     try {
@@ -359,11 +334,12 @@ export default function ProductForm() {
         if (e2) throw e2;
       }
 
-      reset();
+      reset(true);
       setMsg({ t: "ok", m: "کاڵا بە سەرکەوتوویی زیادکرا ✅" });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err: any) {
-      setMsg({ t: "err", m: err?.message ?? "هەڵەیەک ڕوویدا" });
+      // Upload/save failed: everything typed stays; the error is shown next to the button.
+      setSubmitErr(err?.message ?? "هەڵەیەک ڕوویدا، دووبارە هەوڵبدەرەوە");
     } finally {
       setBusy(false);
       setStep("");
@@ -371,32 +347,43 @@ export default function ProductForm() {
   }
 
   return (
-    <form onSubmit={submit}>
+    // noValidate: our own Kurdish messages next to each field instead of the browser popup.
+    <form onSubmit={submit} noValidate>
       {msg ? <div className={`toast ${msg.t}`}>{msg.m}</div> : null}
 
       {restored ? (
         <div className="toast ok" style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
           <span>ڕەشنووسی پێشوو گەڕێندرایەوە</span>
-          <button type="button" className="btn btn-sm" onClick={reset}>
-            سڕینەوە
+          <button type="button" className="btn btn-sm" onClick={() => setRestored(false)}>
+            باشە
           </button>
         </div>
       ) : null}
 
-      <div className="box">
+      <div className={`box ${errs.photo ? "has-err" : ""}`} id="pf-photo">
         <h3>وێنەی سەرەکی</h3>
         <PhotoPicker
           preview={mainPreview}
           label="وێنە بگرە"
           onPick={pickMain}
         />
+        {errs.photo ? <small className="field-err">{errs.photo}</small> : null}
       </div>
 
       <div className="box">
         <h3>زانیاری</h3>
-        <label className="field">
+        <label className={`field ${errs.name ? "has-err" : ""}`} id="pf-name">
           <span>ناوی کاڵا</span>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            type="text"
+            value={name}
+            aria-invalid={!!errs.name}
+            onChange={(e) => {
+              setName(e.target.value);
+              clearErr("name");
+            }}
+          />
+          {errs.name ? <small className="field-err">{errs.name}</small> : null}
         </label>
         <label className="field">
           <span>بەشی سەرەکی</span>
@@ -406,6 +393,7 @@ export default function ProductForm() {
               setCatId(e.target.value);
               setSubId("");
             }}
+            aria-invalid={!!errs.sub && !catId}
           >
             <option value="">هەڵبژێرە...</option>
             {cats.map((c) => (
@@ -415,9 +403,17 @@ export default function ProductForm() {
             ))}
           </select>
         </label>
-        <label className="field">
+        <label className={`field ${errs.sub ? "has-err" : ""}`} id="pf-sub">
           <span>بەشی لاوەکی</span>
-          <select value={subId} onChange={(e) => setSubId(e.target.value)} disabled={!catId}>
+          <select
+            value={subId}
+            aria-invalid={!!errs.sub}
+            onChange={(e) => {
+              setSubId(e.target.value);
+              clearErr("sub");
+            }}
+            disabled={!catId}
+          >
             <option value="">هەڵبژێرە...</option>
             {subs.map((s) => (
               <option key={s.id} value={s.id}>
@@ -425,10 +421,22 @@ export default function ProductForm() {
               </option>
             ))}
           </select>
+          {errs.sub ? <small className="field-err">{errs.sub}</small> : null}
         </label>
-        <label className="field">
+        <label className={`field ${errs.price ? "has-err" : ""}`} id="pf-price">
           <span>نرخ (دینار)</span>
-          <input type="number" inputMode="numeric" min="0" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <input
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={price}
+            aria-invalid={!!errs.price}
+            onChange={(e) => {
+              setPrice(e.target.value);
+              clearErr("price");
+            }}
+          />
+          {errs.price ? <small className="field-err">{errs.price}</small> : null}
         </label>
         <label className="field">
           <span>وەسف (ئارەزوومەندانە)</span>
@@ -456,8 +464,22 @@ export default function ProductForm() {
         </button>
       </div>
 
+      {submitErr ? <div className="toast err" role="alert">{submitErr}</div> : null}
+      {Object.values(errs).some(Boolean) ? (
+        <div className="toast err" role="alert">هەندێک خانە پێویستیان بە چاکردنەوەیە (بە سوور دیاریکراون).</div>
+      ) : null}
       <button type="submit" className="btn btn-primary" disabled={busy}>
         {busy ? step || "کاردەکات..." : "پاشەکەوتکردنی کاڵا"}
+      </button>
+      <button
+        type="button"
+        className="btn btn-clear"
+        disabled={busy}
+        onClick={() => {
+          if (window.confirm("هەموو زانیارییەکانی ئەم فۆڕمە دەسڕدرێنەوە. دڵنیایت؟")) reset(false);
+        }}
+      >
+        سڕینەوەی فۆڕم
       </button>
     </form>
   );
