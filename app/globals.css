@@ -388,6 +388,25 @@ input[type="color"] { width: 44px; height: 44px; padding: 2px; border: 1px solid
 .color-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .preset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.25); cursor: pointer; }
+/* existing products: picker, merge, editor (admin) */
+.merge-box .merge-open { width: 100%; border-style: dashed; padding: 12px 16px; }
+.merge-head { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.merge-head .th, .ppick-item .th { flex: none; width: 52px; height: 68px; border-radius: 10px; overflow: hidden; background: var(--soft); }
+.merge-head .th img, .ppick-item .th img { width: 100%; height: 100%; object-fit: cover; }
+.merge-head .meta, .ppick-item .meta { display: grid; gap: 2px; min-width: 0; }
+.merge-head .meta small, .ppick-item .meta small { color: var(--muted); }
+.ppick-list { display: grid; gap: 6px; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; }
+.ppick-item { display: flex; gap: 12px; align-items: center; width: 100%; padding: 8px; border-radius: 12px; border: 1px solid var(--line); background: var(--field); color: var(--ink); text-align: start; cursor: pointer; }
+.ppick-item:hover { border-color: var(--ink); }
+.ppick-item b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ppick-dots { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0; }
+.ppick-dots .cdot { width: 12px; height: 12px; }
+.ppick-dots small { color: var(--muted); font-size: 12px; margin-inline-start: 4px; }
+.dup-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: var(--err-bg); color: var(--ink); font-size: 13px; }
+.list-item.is-dup { background: linear-gradient(to left, var(--err-bg), transparent 70%); }
+.list-item .acts .btn-ink { white-space: nowrap; }
+.editor-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.size-chip.sold { text-decoration: line-through; opacity: 0.7; }
 /* sub-category picker (admin) */
 .subpick-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
 .subchip { padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--field); color: var(--ink); font-size: 14px; cursor: pointer; transition: border-color 0.15s, background 0.15s, color 0.15s; }

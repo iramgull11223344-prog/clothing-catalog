@@ -16,3 +16,20 @@ export function onCatalogChanged(fn: () => void) {
     document.removeEventListener("visibilitychange", vis);
   };
 }
+
+// Products added/edited/merged: lists and duplicate checks refresh.
+export const PRODUCTS_CHANGED = "admin-products-changed";
+
+export function notifyProductsChanged() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(PRODUCTS_CHANGED));
+}
+
+export function onProductsChanged(fn: () => void) {
+  window.addEventListener(PRODUCTS_CHANGED, fn);
+  const vis = () => document.visibilityState === "visible" && fn();
+  document.addEventListener("visibilitychange", vis);
+  return () => {
+    window.removeEventListener(PRODUCTS_CHANGED, fn);
+    document.removeEventListener("visibilitychange", vis);
+  };
+}

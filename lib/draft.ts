@@ -15,6 +15,8 @@ export type Draft = {
   desc: string;
   price: string;
   colors: DraftColor[];
+  /** Adding these colours to an existing product (its id) instead of creating a new one. */
+  mergeInto?: string;
 };
 
 export function loadDraft(): Draft | null {
@@ -70,6 +72,12 @@ export async function getFile(key: string): Promise<File | null> {
   const blob = (await run("readonly", (s) => s.get(key))) as Blob | undefined;
   if (!blob) return null;
   return blob instanceof File ? blob : new File([blob], "photo.jpg", { type: blob.type || "image/jpeg" });
+}
+
+/** Deletes every saved photo whose key starts with `prefix` (e.g. an edited product's photos). */
+export async function clearFiles(prefix: string) {
+  const keys = ((await run("readonly", (s) => s.getAllKeys())) ?? []) as IDBValidKey[];
+  for (const k of keys) if (String(k).startsWith(prefix)) await putFile(String(k), null);
 }
 
 /** Clears the new-product draft (text + its photos). Other admin drafts are kept. */
